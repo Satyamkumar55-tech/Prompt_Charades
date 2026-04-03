@@ -1,0 +1,22 @@
+export const CHARADES_WORDS = [
+  { word: "Elephant", keywords: ["trunk", "tusks", "big", "grey", "ears", "mammal", "safari", "animal", "jungle", "teeth"] },
+  { word: "Pizza", keywords: ["cheese", "pepperoni", "italian", "slice", "round", "food", "oven", "dough", "sauce"] },
+  { word: "Guitar", keywords: ["strings", "music", "instrument", "play", "acoustic", "electric", "strum", "rock"] },
+  { word: "Astronaut", keywords: ["space", "moon", "star", "rocket", "helmet", "gravity", "suit", "nasa", "orbit"] },
+  { word: "Butterfly", keywords: ["wings", "colors", "bug", "insect", "cocoon", "fly", "garden", "flower"] },
+  { word: "Skyscraper", keywords: ["building", "tall", "city", "glass", "office", "climb", "high", "architecture"] },
+  { word: "Tornado", keywords: ["wind", "storm", "spin", "funnel", "weather", "clouds", "destructive", "twist"] },
+  { word: "Kangaroo", keywords: ["jump", "pouch", "australia", "hop", "mammal", "box", "kick", "outback"] },
+  { word: "Firefighter", keywords: ["fire", "water", "truck", "helmet", "rescue", "ladder", "hose", "smoke"] },
+  { word: "Rainbow", keywords: ["colors", "sky", "rain", "sun", "arch", "prism", "gold", "weather"] },
+  { word: "Lighthouse", keywords: ["ocean", "light", "shore", "tower", "boats", "sea", "warning", "coast"] },
+  { word: "Snowman", keywords: ["cold", "snow", "winter", "carrot", "hat", "buttons", "coal", "frozen"] },
+  { word: "Submarine", keywords: ["ocean", "underwater", "yellow", "periscope", "sink", "boat", "navy", "depth"] },
+  { word: "Spiderman", keywords: ["web", "hero", "marvel", "swing", "spider", "climb", "mask", "peter parker"] },
+  { word: "Ice Cream", keywords: ["cold", "sweet", "cone", "scoop", "flavor", "melt", "summer", "dessert"] },
+  { word: "Pyramid", keywords: ["egypt", "triangle", "tombs", "sand", "desert", "pharaoh", "ancient", "stones"] },
+  { word: "Robot", keywords: ["metal", "circuit", "beep", "future", "machine", "cyborg", "android", "program"] },
+  { word: "Cactus", keywords: ["desert", "green", "spikes", "prickly", "water", "dry", "hot", "plant"] },
+  { word: "Volcano", keywords: ["lava", "hot", "mountain", "eruption", "ash", "fire", "smoke", "magma"] },
+  { word: "Library", keywords: ["books", "quiet", "read", "shelf", "study", "borrow", "silence", "building"] }
+];
