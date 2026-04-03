@@ -1,43 +1,55 @@
-import { useState, useCallback, useEffect } from 'react';
+import { useState, useCallback, useEffect, useRef } from 'react';
 
 const useTextToSpeech = () => {
   const [isSpeaking, setIsSpeaking] = useState(false);
   const [voices, setVoices] = useState([]);
+  const synthesisRef = useRef(window.speechSynthesis);
 
-  useEffect(() => {
-    const loadVoices = () => {
-      const availableVoices = window.speechSynthesis.getVoices();
-      setVoices(availableVoices);
-    };
-
-    window.speechSynthesis.onvoiceschanged = loadVoices;
-    loadVoices();
+  const loadVoices = useCallback(() => {
+    const availableVoices = synthesisRef.current.getVoices();
+    setVoices(availableVoices);
   }, []);
 
-  const speak = useCallback((text, preferredVoiceName = 'Google US English') => {
-    if (!window.speechSynthesis) return;
+  useEffect(() => {
+    if (!synthesisRef.current) return;
+    
+    window.speechSynthesis.onvoiceschanged = loadVoices;
+    loadVoices();
+    
+    return () => {
+      window.speechSynthesis.onvoiceschanged = null;
+    };
+  }, [loadVoices]);
 
-    window.speechSynthesis.cancel(); // Cancel any existing speech
+  const speak = useCallback((text, preferredVoiceName = 'Google US English') => {
+    if (!synthesisRef.current) return;
+
+    synthesisRef.current.cancel(); // Cancel any existing speech
 
     const utterance = new SpeechSynthesisUtterance(text);
     
-    // Select voice
-    const voice = voices.find(v => v.name.includes(preferredVoiceName)) || voices[0];
+    // Select voice - try to find preferred, then any US English, then first available
+    const voice = voices.find(v => v.name.includes(preferredVoiceName)) || 
+                  voices.find(v => v.name.includes('English') && v.name.includes('US')) ||
+                  voices[0];
+                  
     if (voice) utterance.voice = voice;
     
-    utterance.pitch = 1.1; // Slightly more energetic
-    utterance.rate = 1;
+    utterance.pitch = 1.0; 
+    utterance.rate = 1.0;
 
     utterance.onstart = () => setIsSpeaking(true);
     utterance.onend = () => setIsSpeaking(false);
     utterance.onerror = () => setIsSpeaking(false);
 
-    window.speechSynthesis.speak(utterance);
+    synthesisRef.current.speak(utterance);
   }, [voices]);
 
   const cancelSpeech = useCallback(() => {
-    window.speechSynthesis.cancel();
-    setIsSpeaking(false);
+    if (synthesisRef.current) {
+      synthesisRef.current.cancel();
+      setIsSpeaking(false);
+    }
   }, []);
 
   return { speak, isSpeaking, cancelSpeech, voices };

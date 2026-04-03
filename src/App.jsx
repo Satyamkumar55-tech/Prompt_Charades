@@ -4,7 +4,7 @@ import {
   Gamepad2, Mic, MicOff, Trophy, X, SkipForward, Play, 
   RotateCcw, Volume2, Settings, Info, CheckCircle2,
   Sparkles, Zap, BrainCircuit, Heart, User, Mail,
-  Clock, Award, Brain
+  Clock, Award, Brain, HelpCircle
 } from 'lucide-react';
 import useSpeechToText from './hooks/useSpeechToText';
 import useTextToSpeech from './hooks/useTextToSpeech';
@@ -13,13 +13,10 @@ import ThemeToggle from './components/ThemeToggle';
 
 const App = () => {
   // Theme State
-  const [theme, setTheme] = useState(() => {
-    const saved = localStorage.getItem('theme');
-    return saved || 'dark';
-  });
+  const [theme, setTheme] = useState('dark'); // Fixed to dark for this UI
 
   // Game State
-  const [gameState, setGameState] = useState('onboarding'); // onboarding, ready, playing, results
+  const [gameState, setGameState] = useState('onboarding'); // onboarding, playing, results
   const [currentWordIndex, setCurrentWordIndex] = useState(0);
   const [score, setScore] = useState({ correct: 0, wrong: 0, skipped: 0 });
   const [timeLeft, setTimeLeft] = useState(90);
@@ -27,55 +24,42 @@ const App = () => {
   const [userEmail, setUserEmail] = useState('');
   const [transcript, setTranscript] = useState('');
   const [lastAiGuess, setLastAiGuess] = useState('');
-  const [showConfetti, setShowConfetti] = useState(false);
   const [isThinking, setIsThinking] = useState(false);
-
-  // Theme effect
-  useEffect(() => {
-    document.body.className = theme;
-    localStorage.setItem('theme', theme);
-  }, [theme]);
-
-  const toggleTheme = () => setTheme(prev => prev === 'dark' ? 'light' : 'dark');
+  const [showHowToPlay, setShowHowToPlay] = useState(false);
+  const [isVoiceConnected, setIsVoiceConnected] = useState(false);
 
   // Hooks
   const { speak, isSpeaking, cancelSpeech } = useTextToSpeech();
   
-  const handleTranscript = useCallback((text) => {
+  const handleTranscript = useCallback((text, isFinal) => {
     setTranscript(text);
-    if (text.length > 3 && !isSpeaking) {
+    if (text.trim().length > 2 && isVoiceConnected) {
        processHint(text);
     }
-  }, [isSpeaking, currentWordIndex]);
+  }, [isVoiceConnected]);
 
   const { isListening, startListening, stopListening, error: speechError } = useSpeechToText(handleTranscript);
 
   // Timer logic
   useEffect(() => {
     let timer;
-    if (gameState === 'playing' && timeLeft > 0) {
+    if (gameState === 'playing' && isVoiceConnected && timeLeft > 0) {
       timer = setInterval(() => setTimeLeft(prev => prev - 1), 1000);
-    } else if (timeLeft === 0) {
+    } else if (timeLeft === 0 && gameState === 'playing') {
       setGameState('results');
       stopListening();
+      setIsVoiceConnected(false);
     }
     return () => clearInterval(timer);
-  }, [gameState, timeLeft]);
+  }, [gameState, timeLeft, isVoiceConnected, stopListening]);
 
-  const startGame = () => {
-    setCurrentWordIndex(Math.floor(Math.random() * CHARADES_WORDS.length));
-    setScore({ correct: 0, wrong: 0, skipped: 0 });
-    setTimeLeft(90);
-    setGameState('playing');
+  const connectVoice = () => {
+    setIsVoiceConnected(true);
     startListening();
     speak(`Ready ${userName || 'Player'}? Describe your first word now!`);
   };
 
   const nextWord = (type) => {
-    if (type === 'correct') {
-      setShowConfetti(true);
-      setTimeout(() => setShowConfetti(false), 2000);
-    }
     setScore(prev => ({ ...prev, [type]: prev[type] + 1 }));
     setTranscript('');
     setLastAiGuess('');
@@ -84,53 +68,44 @@ const App = () => {
 
   const processHint = (text) => {
     const currentWordData = CHARADES_WORDS[currentWordIndex];
+    if (!currentWordData) return;
+    
     const userText = text.toLowerCase();
     
+    // Check if the word itself is said (against the rules, but AI should acknowledge)
+    if (userText.includes(currentWordData.word.toLowerCase())) {
+        return; // Don't guess if they just said the word
+    }
+
     const match = currentWordData.keywords.find(keyword => 
       userText.includes(keyword.toLowerCase())
     );
 
-    if (match && !isThinking) {
+    if (match && !isThinking && !isSpeaking) {
+      // AI "Thinking" state
       setIsThinking(true);
       setTimeout(() => {
-        const guess = `Is it a ${currentWordData.word}?`;
+        const guess = `${currentWordData.word}?`;
         setLastAiGuess(guess);
-        speak(guess);
+        speak(`Is it a ${currentWordData.word}?`);
         setIsThinking(false);
-      }, 800);
+      }, 600);
     }
   };
 
-  const currentWord = CHARADES_WORDS[currentWordIndex].word;
+  const currentWord = CHARADES_WORDS[currentWordIndex]?.word || "Game Over";
 
   return (
-    <div className="flex-1 flex flex-col items-center justify-center p-6 relative">
+    <div className="flex-1 flex flex-col items-center justify-center p-6 relative overflow-hidden">
       <div className="app-bg" />
       
-      <ThemeToggle theme={theme} toggleTheme={toggleTheme} />
-
-      {/* Confetti Overlay */}
-      <AnimatePresence>
-        {showConfetti && (
-          <div className="confetti-container flex items-center justify-center">
-            {[...Array(30)].map((_, i) => (
-              <motion.div
-                key={i}
-                initial={{ y: 0, x: 0, opacity: 1, scale: 1 }}
-                animate={{ 
-                  y: [0, -400, 800], 
-                  x: [0, (Math.random() - 0.5) * 1000],
-                  rotate: [0, 720],
-                  opacity: [1, 1, 0]
-                }}
-                transition={{ duration: 2.5, ease: "easeOut" }}
-                className="absolute w-3 h-3 rounded-sm"
-                style={{ backgroundColor: ['#8b5cf6', '#f97316', '#22c55e', '#ef4444'][i % 4] }}
-              />
-            ))}
-          </div>
-        )}
-      </AnimatePresence>
+      {/* Help Icon */}
+      <button 
+        onClick={() => setShowHowToPlay(true)}
+        className="fixed top-6 right-6 p-3 bg-surface-secondary rounded-full text-text-muted hover:text-white transition-colors border border-glass-border"
+      >
+        <HelpCircle size={24} />
+      </button>
 
       <AnimatePresence mode="wait">
         
@@ -138,27 +113,27 @@ const App = () => {
         {gameState === 'onboarding' && (
           <motion.div 
             key="onboarding"
-            initial={{ opacity: 0, y: 40 }}
-            animate={{ opacity: 1, y: 0 }}
-            exit={{ opacity: 0, scale: 0.9 }}
-            className="glass glass-card flex flex-col items-center"
+            initial={{ opacity: 0, scale: 0.9 }}
+            animate={{ opacity: 1, scale: 1 }}
+            exit={{ opacity: 0, scale: 1.1 }}
+            className="card-main flex flex-col items-center"
           >
-            <div className="w-20 h-20 bg-surface-secondary rounded-3xl flex items-center justify-center mb-8 border border-glass-border shadow-inner">
+            <div className="w-20 h-20 bg-surface-secondary rounded-[1.5rem] flex items-center justify-center mb-8 border border-glass-border">
                <Gamepad2 className="text-secondary" size={40} />
             </div>
             
-            <h1 className="text-5xl mb-3 font-black tracking-tight text-white">Prompt Charades</h1>
-            <p className="text-text-muted mb-10 text-lg font-medium">Charades Meets AI: Guess Smarter, Play Faster!</p>
+            <h1 className="text-5xl mb-2 font-black tracking-tighter text-white">Prompt Charades</h1>
+            <p className="text-text-muted mb-10 text-lg font-medium opacity-80">Charades Meets AI: Guess Smarter, Play Faster!</p>
             
             <div className="w-full space-y-6 mb-10">
               <div className="text-left">
-                <label className="block text-xs font-black uppercase tracking-widest text-text-muted mb-3 ml-1">Your Name</label>
-                <div className="relative">
-                  <User className="absolute left-4 top-1/2 -translate-y-1/2 text-text-muted" size={20} />
+                <label className="block text-[10px] font-black uppercase tracking-[0.2em] text-white/60 mb-3 ml-1">Your Name</label>
+                <div className="input-container">
+                  <User className="input-icon" size={20} />
                   <input 
                     type="text" 
                     placeholder="Enter your name" 
-                    className="input-premium pl-12"
+                    className="input-field input-with-icon"
                     value={userName}
                     onChange={(e) => setUserName(e.target.value)}
                   />
@@ -166,13 +141,13 @@ const App = () => {
               </div>
 
               <div className="text-left">
-                <label className="block text-xs font-black uppercase tracking-widest text-text-muted mb-3 ml-1">Email Address</label>
-                <div className="relative">
-                  <Mail className="absolute left-4 top-1/2 -translate-y-1/2 text-text-muted" size={20} />
+                <label className="block text-[10px] font-black uppercase tracking-[0.2em] text-white/60 mb-3 ml-1">Email Address</label>
+                <div className="input-container">
+                  <Mail className="input-icon" size={20} />
                   <input 
                     type="email" 
                     placeholder="Enter your email" 
-                    className="input-premium pl-12"
+                    className="input-field input-with-icon"
                     value={userEmail}
                     onChange={(e) => setUserEmail(e.target.value)}
                   />
@@ -181,66 +156,18 @@ const App = () => {
             </div>
 
             <button 
-              onClick={() => setGameState('ready')}
+              onClick={() => {
+                setGameState('playing');
+                setCurrentWordIndex(Math.floor(Math.random() * CHARADES_WORDS.length));
+              }}
               disabled={!userName || !userEmail}
-              className="btn-premium w-full flex items-center justify-center gap-3 disabled:opacity-40 disabled:cursor-not-allowed"
+              className="btn-primary w-full"
             >
               <Sparkles size={20} />
               Let's Play!
             </button>
 
-            <p className="mt-8 text-xs font-bold text-text-muted opacity-60">90 seconds • 100 points per correct answer</p>
-          </motion.div>
-        )}
-
-        {/* READY / MISSION BRIEFING */}
-        {gameState === 'ready' && (
-          <motion.div 
-            key="ready"
-            initial={{ opacity: 0, scale: 0.95 }}
-            animate={{ opacity: 1, scale: 1 }}
-            exit={{ opacity: 0, scale: 1.05 }}
-            className="glass glass-card max-w-2xl px-12"
-          >
-            <div className="flex justify-center gap-6 mb-10">
-               <div className="score-badge text-secondary"><Zap size={20} /> AI Ready</div>
-               <div className="score-badge text-primary"><Brain size={20} /> Neural Linked</div>
-            </div>
-            
-            <h2 className="text-4xl mb-8 font-black uppercase tracking-tight text-white flex items-center justify-center gap-4">
-              <Trophy className="text-accent" /> Mission Briefing
-            </h2>
-            
-            <div className="space-y-4 mb-12">
-              <div className="flex gap-5 items-center bg-surface-secondary p-5 rounded-2xl border border-glass-border text-left">
-                <div className="w-12 h-12 rounded-xl bg-primary/20 flex items-center justify-center text-primary shrink-0"><Mic size={24} /></div>
-                <div>
-                  <p className="font-bold text-white uppercase text-xs tracking-widest mb-1">Step 01</p>
-                  <p className="text-text-muted text-sm">Speak hints for the word. <span className="text-primary font-bold">Don't say the word itself!</span></p>
-                </div>
-              </div>
-              <div className="flex gap-5 items-center bg-surface-secondary p-5 rounded-2xl border border-glass-border text-left">
-                <div className="w-12 h-12 rounded-xl bg-secondary/20 flex items-center justify-center text-secondary shrink-0"><BrainCircuit size={24} /></div>
-                <div>
-                  <p className="font-bold text-white uppercase text-xs tracking-widest mb-1">Step 02</p>
-                  <p className="text-text-muted text-sm">Our AI Agent listens and shouts guesses in real-time.</p>
-                </div>
-              </div>
-              <div className="flex gap-5 items-center bg-surface-secondary p-5 rounded-2xl border border-glass-border text-left">
-                <div className="w-12 h-12 rounded-xl bg-accent/20 flex items-center justify-center text-accent shrink-0"><CheckCircle2 size={24} /></div>
-                <div>
-                  <p className="font-bold text-white uppercase text-xs tracking-widest mb-1">Step 03</p>
-                  <p className="text-text-muted text-sm">Score 100 points for every correct guess!</p>
-                </div>
-              </div>
-            </div>
-
-            <button 
-              onClick={startGame}
-              className="btn-premium w-full py-6 text-2xl"
-            >
-              Initiate Link
-            </button>
+            <p className="mt-8 text-[11px] font-bold text-white/40 tracking-wider">90 seconds • 100 points per correct answer</p>
           </motion.div>
         )}
 
@@ -248,136 +175,124 @@ const App = () => {
         {gameState === 'playing' && (
           <motion.div 
             key="playing"
-            className="w-full max-w-5xl flex flex-col gap-6"
+            className="w-full max-w-5xl flex flex-col items-center gap-10"
             initial={{ opacity: 0, y: 30 }}
             animate={{ opacity: 1, y: 0 }}
           >
-            {/* HUD / HEADER */}
-            <div className="glass px-10 py-5 flex justify-between items-center bg-surface/80">
-              <div className="flex gap-10">
-                <div className="flex items-center gap-4 bg-surface-secondary/50 px-6 py-2 rounded-2xl border border-glass-border">
-                  <Clock className={timeLeft < 20 ? 'text-danger animate-pulse' : 'text-secondary'} size={24} />
-                  <div className="flex flex-col">
-                    <span className="text-[10px] text-text-muted font-black uppercase tracking-widest">Time Left</span>
-                    <span className={`text-2xl font-black font-mono transition-colors ${timeLeft < 20 ? 'text-danger' : 'text-white'}`}>
-                      {Math.floor(timeLeft / 60)}:{ (timeLeft % 60).toString().padStart(2, '0')}
-                    </span>
-                  </div>
+            {/* Header / Timer HUD */}
+            <div className="hud-timer text-center shadow-2xl">
+              <div className="flex justify-between items-center mb-1">
+                <div className="flex items-center gap-2 text-white font-bold">
+                  <Clock size={20} className="text-secondary" />
+                  <span className="text-lg">
+                    {isVoiceConnected ? "Time Left" : "Connect Voice to Start"}
+                  </span>
                 </div>
-                
-                <div className="flex items-center gap-4 bg-surface-secondary/50 px-6 py-2 rounded-2xl border border-glass-border">
-                  <Award className="text-accent" size={24} />
-                  <div className="flex flex-col">
-                    <span className="text-[10px] text-text-muted font-black uppercase tracking-widest">Points</span>
-                    <span className="text-2xl font-black font-mono text-white">{(score.correct * 100).toLocaleString()}</span>
-                  </div>
+                <div className="text-3xl font-black font-mono text-white">
+                  {Math.floor(timeLeft / 60)}:{ (timeLeft % 60).toString().padStart(2, '0')}
                 </div>
               </div>
-
-              <div className="flex items-center gap-4">
-                 <div className="flex gap-6 text-xs font-black text-text-muted uppercase tracking-widest">
-                    <span className="flex items-center gap-2"><Trophy size={14} className="text-white" /> {score.correct}</span>
-                    <span className="flex items-center gap-2"><X size={14} className="text-danger" /> {score.wrong}</span>
-                    <span className="flex items-center gap-2"><SkipForward size={14} className="text-accent" /> {score.skipped}</span>
-                 </div>
+              
+              <div className="progress-bar-container">
+                <motion.div 
+                    className="progress-bar-fill"
+                    initial={{ width: "100%" }}
+                    animate={{ width: `${(timeLeft / 90) * 100}%` }}
+                />
               </div>
+              
+              <p className="text-[10px] text-text-muted font-bold uppercase tracking-wider">
+                Timer starts when you connect the voice agent
+              </p>
             </div>
 
             {/* Word Card */}
-            <div className="glass p-12 text-center relative overflow-hidden group">
-              <div className="absolute top-0 left-0 w-full h-1 bg-primary/20">
-                <motion.div 
-                   className="h-full bg-primary shadow-[0_0_15px_var(--primary)]"
-                   animate={{ width: isListening ? "100%" : "0%" }}
-                   transition={{ duration: 1 }}
-                />
-              </div>
-
-              <p className="text-text-muted font-black uppercase tracking-[0.4em] text-xs mb-4">Give hints for this word</p>
+            <div className="word-card relative">
+              <p className="text-secondary font-black uppercase tracking-[0.3em] text-[10px] mb-4">Give hints for this word</p>
               
               <motion.h2 
                 key={currentWordIndex}
-                initial={{ opacity: 0, scale: 0.9, y: 10 }}
-                animate={{ opacity: 1, scale: 1, y: 0 }}
-                className="word-title text-white animate-float"
+                initial={{ opacity: 0, scale: 0.8 }}
+                animate={{ opacity: 1, scale: 1 }}
+                className="word-display"
               >
                 {currentWord}
               </motion.h2>
 
-              <p className="text-sm font-bold text-text-muted mb-12 opacity-50">Word {score.correct + score.wrong + score.skipped + 1} of 100+</p>
-
-              {/* AI Interaction Zone */}
-              <div className="max-w-xl mx-auto space-y-8">
-                <div className="flex flex-col items-center gap-3">
-                  {isThinking ? (
-                    <div className="flex gap-2 h-6 items-center">
+              <p className="text-xs font-bold text-text-muted mt-4">Word {score.correct + score.wrong + score.skipped + 1} of 108</p>
+              
+              {/* Voice Status Overlay */}
+              <div className="mt-8 h-10 flex items-center justify-center">
+                 {isThinking ? (
+                    <div className="flex gap-1">
                       {[0, 1, 2].map(i => (
                         <motion.div 
                           key={i}
-                          animate={{ height: [8, 24, 8], opacity: [0.5, 1, 0.5] }} 
-                          transition={{ repeat: Infinity, duration: 0.6, delay: i * 0.15 }} 
-                          className="w-1.5 bg-secondary rounded-full" 
+                          animate={{ height: [8, 16, 8], opacity: [0.5, 1, 0.5] }} 
+                          transition={{ repeat: Infinity, duration: 0.6, delay: i * 0.1 }} 
+                          className="w-1 bg-primary rounded-full" 
                         />
                       ))}
                     </div>
-                  ) : (
-                    <div className={`p-4 rounded-full ${isListening ? 'bg-primary/20 text-primary' : 'bg-surface-secondary text-text-muted'}`}>
-                       <Mic size={24} className={isListening ? "animate-pulse" : ""} />
-                    </div>
-                  )}
-                  <p className="text-lg font-medium text-text-muted italic h-8 transition-all">
-                     {transcript ? `"${transcript}"` : "AI is listening for hints..."}
-                  </p>
-                </div>
-
-                <AnimatePresence>
-                  {lastAiGuess && (
-                    <motion.div 
-                      initial={{ scale: 0.8, opacity: 0, y: 10 }}
-                      animate={{ scale: 1, opacity: 1, y: 0 }}
-                      className="p-8 bg-primary/10 border-2 border-primary/30 rounded-[2.5rem] relative overflow-hidden"
-                    >
-                      <div className="absolute top-0 left-0 w-full h-full bg-primary/5 blur-xl pointer-events-none" />
-                      <div className="relative flex items-center justify-center gap-4">
-                        <Volume2 className="text-primary" size={32} />
-                        <span className="font-black text-4xl text-white uppercase italic tracking-tight">"{lastAiGuess}"</span>
-                      </div>
-                    </motion.div>
-                  )}
-                </AnimatePresence>
+                 ) : (
+                    transcript && <p className="text-text-muted italic text-sm">AI heard: "{transcript}"</p>
+                 )}
               </div>
             </div>
 
-            {/* Action Grid */}
-            <div className="grid grid-cols-3 gap-6 h-44">
-              <button 
-                onClick={() => nextWord('correct')}
-                className="glass group hover:bg-success/20 border-b-[12px] border-success transition-all flex flex-col items-center justify-center gap-3"
-              >
-                <div className="p-4 rounded-2xl bg-success/10 group-hover:bg-success group-hover:text-white transition-all">
-                  <CheckCircle2 size={32} className="text-success group-hover:text-white" />
-                </div>
-                <span className="font-black text-xs tracking-widest uppercase text-success">Correct</span>
-              </button>
-              
-              <button 
-                onClick={() => nextWord('wrong')}
-                className="glass group hover:bg-danger/20 border-b-[12px] border-danger transition-all flex flex-col items-center justify-center gap-3"
-              >
-                <div className="p-4 rounded-2xl bg-danger/10 group-hover:bg-danger group-hover:text-white transition-all">
-                  <X size={32} className="text-danger group-hover:text-white" />
-                </div>
-                <span className="font-black text-xs tracking-widest uppercase text-danger">Wrong</span>
-              </button>
+            {/* Connect Button or AI Guess */}
+            <div className="w-full max-w-[600px] h-32 flex items-center justify-center">
+              {!isVoiceConnected ? (
+                <button 
+                  onClick={connectVoice}
+                  className="btn-pink group"
+                >
+                  <Mic size={24} className="group-hover:scale-110 transition-transform" />
+                  Connect Voice Agent to Start
+                </button>
+              ) : (
+                <AnimatePresence>
+                  {lastAiGuess && (
+                    <motion.div 
+                      key={lastAiGuess}
+                      initial={{ scale: 0.5, opacity: 0 }}
+                      animate={{ scale: 1, opacity: 1 }}
+                      className="bg-white/5 border border-white/10 rounded-[2rem] px-10 py-6 flex items-center gap-4 shadow-xl"
+                    >
+                      <Volume2 className="text-primary" size={32} />
+                      <span className="text-4xl font-black text-white italic tracking-tighter">"{lastAiGuess}"</span>
+                    </motion.div>
+                  )}
+                </AnimatePresence>
+              )}
+            </div>
 
-              <button 
-                onClick={() => nextWord('skipped')}
-                className="glass group hover:bg-accent/20 border-b-[12px] border-accent transition-all flex flex-col items-center justify-center gap-3"
-              >
-                <div className="p-4 rounded-2xl bg-accent/10 group-hover:bg-accent group-hover:text-white transition-all">
-                  <SkipForward size={32} className="text-accent group-hover:text-white" />
+            {/* Score HUD */}
+            <div className="flex gap-10 items-center justify-center mb-[-1rem]">
+                <div className="flex items-center gap-2 text-text-muted font-black text-sm">
+                   <Trophy size={20} className="text-secondary" /> {score.correct}
                 </div>
-                <span className="font-black text-xs tracking-widest uppercase text-accent">Skip</span>
+                <div className="flex items-center gap-2 text-text-muted font-black text-sm">
+                   <X size={20} className="text-danger" /> {score.wrong}
+                </div>
+                <div className="flex items-center gap-2 text-text-muted font-black text-sm">
+                   <SkipForward size={20} className="text-yellow-500" /> {score.skipped}
+                </div>
+            </div>
+
+            {/* Action Grid */}
+            <div className="action-grid">
+              <button onClick={() => nextWord('correct')} className="action-btn success">
+                <CheckCircle2 size={32} />
+                Correct
+              </button>
+              <button onClick={() => nextWord('wrong')} className="action-btn danger">
+                <X size={32} />
+                Wrong
+              </button>
+              <button onClick={() => nextWord('skipped')} className="action-btn warning">
+                <SkipForward size={32} />
+                Skip
               </button>
             </div>
           </motion.div>
@@ -387,69 +302,149 @@ const App = () => {
         {gameState === 'results' && (
           <motion.div 
             key="results"
-            className="glass glass-card min-w-[600px] overflow-hidden"
+            className="card-main min-w-[500px]"
             initial={{ opacity: 0, scale: 0.9 }}
             animate={{ opacity: 1, scale: 1 }}
           >
-            <div className="absolute top-0 left-0 w-full h-2 bg-primary-gradient" />
+            <div className="w-24 h-24 bg-accent/10 rounded-full flex items-center justify-center mx-auto mb-8 border-2 border-accent/20">
+               <Trophy size={48} className="text-accent" />
+            </div>
             
-            <div className="mt-4 mb-10">
-               <div className="w-24 h-24 bg-accent/10 rounded-full flex items-center justify-center mx-auto mb-6 border-2 border-accent/20">
-                  <Trophy size={48} className="text-accent" />
+            <h2 className="text-5xl font-black text-white mb-2">GAME OVER</h2>
+            <p className="text-text-muted uppercase font-black tracking-widest text-xs mb-10">Mission Summary</p>
+
+            <div className="grid grid-cols-3 gap-4 mb-10">
+               <div className="bg-surface-secondary p-6 rounded-2xl border border-glass-border">
+                  <span className="text-3xl font-black text-success">{score.correct}</span>
+                  <p className="text-[10px] text-text-muted font-black uppercase mt-2">Correct</p>
                </div>
-               <h2 className="text-5xl font-black text-white tracking-tighter mb-2">GAME OVER</h2>
-               <p className="text-text-muted uppercase font-black tracking-[0.3em] text-xs">Mission Summary</p>
+               <div className="bg-surface-secondary p-6 rounded-2xl border border-glass-border">
+                  <span className="text-3xl font-black text-danger">{score.wrong}</span>
+                  <p className="text-[10px] text-text-muted font-black uppercase mt-2">Wrong</p>
+               </div>
+               <div className="bg-surface-secondary p-6 rounded-2xl border border-glass-border">
+                  <span className="text-3xl font-black text-accent">{score.skipped}</span>
+                  <p className="text-[10px] text-text-muted font-black uppercase mt-2">Skipped</p>
+               </div>
             </div>
 
-            <div className="grid grid-cols-3 gap-4 mb-12">
-              <div className="bg-surface-secondary p-8 rounded-[2rem] border border-glass-border">
-                <span className="text-4xl font-black text-primary">{score.correct}</span>
-                <p className="text-[10px] text-text-muted font-black uppercase mt-3 tracking-widest">Mastered</p>
-              </div>
-              <div className="bg-surface-secondary p-8 rounded-[2rem] border border-glass-border">
-                <span className="text-4xl font-black text-danger">{score.wrong}</span>
-                <p className="text-[10px] text-text-muted font-black uppercase mt-3 tracking-widest">Failed</p>
-              </div>
-              <div className="bg-surface-secondary p-8 rounded-[2rem] border border-glass-border">
-                <span className="text-4xl font-black text-accent">{score.skipped}</span>
-                <p className="text-[10px] text-text-muted font-black uppercase mt-3 tracking-widest">Skipped</p>
-              </div>
+            <div className="bg-white/5 p-6 rounded-2xl mb-8 flex justify-between items-center">
+               <span className="text-text-muted font-bold text-sm">TOTAL POINTS</span>
+               <span className="text-3xl font-black text-white">{(score.correct * 100).toLocaleString()}</span>
             </div>
 
-            <div className="flex flex-col gap-4">
-               <div className="bg-primary/10 p-6 rounded-2xl flex justify-between items-center border border-primary/20">
-                  <span className="text-text-muted font-bold uppercase text-xs tracking-widest">Final Agent Score</span>
-                  <span className="text-3xl font-black text-white font-mono">{(score.correct * 100).toLocaleString()}</span>
-               </div>
-
-               <div className="flex gap-4 mt-4">
-                  <button 
-                    onClick={() => setGameState('onboarding')}
-                    className="flex-1 p-5 rounded-2xl glass hover:bg-surface-secondary text-white font-bold flex items-center justify-center gap-3 transition-all"
-                  >
-                    <RotateCcw size={20} /> Exit Arena
-                  </button>
-                  <button 
-                    onClick={startGame}
-                    className="btn-premium flex-[2] rounded-2xl text-xl"
-                  >
-                    Re-Deploy Agent
-                  </button>
-               </div>
+            <div className="flex gap-4">
+              <button 
+                onClick={() => {
+                  setGameState('onboarding');
+                  setTimeLeft(90);
+                  setScore({ correct: 0, wrong: 0, skipped: 0 });
+                  setIsVoiceConnected(false);
+                }}
+                className="flex-1 p-4 rounded-xl bg-surface-secondary text-white font-bold hover:bg-surface-secondary/80 transition-all"
+              >
+                Exit Game
+              </button>
+              <button 
+                onClick={() => {
+                  setGameState('playing');
+                  setTimeLeft(90);
+                  setScore({ correct: 0, wrong: 0, skipped: 0 });
+                  setIsVoiceConnected(false);
+                  setCurrentWordIndex(Math.floor(Math.random() * CHARADES_WORDS.length));
+                }}
+                className="flex-[2] btn-primary"
+              >
+                Play Again
+              </button>
             </div>
           </motion.div>
         )}
 
       </AnimatePresence>
 
+      {/* HOW TO PLAY MODAL */}
+      <AnimatePresence>
+        {showHowToPlay && (
+          <motion.div 
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            className="modal-overlay"
+            onClick={() => setShowHowToPlay(false)}
+          >
+            <motion.div 
+              initial={{ scale: 0.9, y: 50 }}
+              animate={{ scale: 1, y: 0 }}
+              exit={{ scale: 0.9, y: 50 }}
+              className="modal-content"
+              onClick={e => e.stopPropagation()}
+            >
+              <button className="modal-close" onClick={() => setShowHowToPlay(false)}>
+                <X size={24} />
+              </button>
+
+              <div className="flex items-center gap-4 mb-8">
+                 <div className="w-12 h-12 bg-secondary/20 rounded-xl flex items-center justify-center text-secondary">
+                    <Trophy size={28} />
+                 </div>
+                 <div>
+                    <h3 className="text-2xl font-black text-white">How to Play</h3>
+                    <p className="text-xs font-bold text-text-muted">Master the rules, win the game!</p>
+                 </div>
+              </div>
+
+              <div className="space-y-4">
+                 <div className="how-to-step">
+                    <div className="step-icon bg-primary/20 text-primary"><Mic size={24} /></div>
+                    <div>
+                       <h4 className="text-white font-bold mb-1">Connect Voice Agent</h4>
+                       <p className="text-xs text-text-muted leading-relaxed">First, connect the AI voice agent. The 90-second timer starts when you connect!</p>
+                    </div>
+                 </div>
+                 <div className="how-to-step">
+                    <div className="step-icon bg-secondary/20 text-secondary"><Clock size={24} /></div>
+                    <div>
+                       <h4 className="text-white font-bold mb-1">90 Seconds</h4>
+                       <p className="text-xs text-text-muted leading-relaxed">Once connected, you have 90 seconds to get through as many words as possible.</p>
+                    </div>
+                 </div>
+                 <div className="how-to-step">
+                    <div className="step-icon bg-accent/20 text-accent"><Play size={24} /></div>
+                    <div>
+                       <h4 className="text-white font-bold mb-1">Give Hints</h4>
+                       <p className="text-xs text-text-muted leading-relaxed">Describe the word to the AI without saying it. The AI will try to guess!</p>
+                    </div>
+                 </div>
+                 <div className="how-to-step">
+                    <div className="step-icon bg-success/20 text-success"><CheckCircle2 size={24} /></div>
+                    <div>
+                       <h4 className="text-white font-bold mb-1">Correct (+100 pts)</h4>
+                       <p className="text-xs text-text-muted leading-relaxed">Tap Correct when the AI guesses right. Each correct answer = 100 points!</p>
+                    </div>
+                 </div>
+                 <div className="how-to-step">
+                    <div className="step-icon bg-danger/20 text-danger"><X size={24} /></div>
+                    <div>
+                       <h4 className="text-white font-bold mb-1">Wrong (0 pts)</h4>
+                       <p className="text-xs text-text-muted leading-relaxed">If you accidentally say the word or the AI gives up, tap Wrong.</p>
+                    </div>
+                 </div>
+              </div>
+            </motion.div>
+          </motion.div>
+        )}
+      </AnimatePresence>
+
+      {/* ERROR TOAST */}
       {speechError && (
         <motion.div 
           initial={{ y: 100 }}
           animate={{ y: 0 }}
-          className="fixed bottom-10 bg-danger/20 backdrop-blur-xl border border-danger/30 text-white px-10 py-5 rounded-3xl text-sm font-bold flex items-center gap-4 shadow-2xl z-50"
+          className="fixed bottom-10 bg-danger/20 backdrop-blur-xl border border-danger/30 text-white px-8 py-4 rounded-2xl text-xs font-bold flex items-center gap-4 shadow-2xl z-[200]"
         >
-          <div className="w-3 h-3 bg-danger rounded-full animate-ping" />
-          <span className="uppercase tracking-widest">Neural Link Disturbed: {speechError}</span>
+          <div className="w-2 h-2 bg-danger rounded-full animate-ping" />
+          <span className="uppercase tracking-widest">Neural Link Error: {speechError}</span>
         </motion.div>
       )}
     </div>

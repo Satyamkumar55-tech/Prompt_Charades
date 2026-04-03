@@ -4,6 +4,7 @@ const useSpeechToText = (onTranscript) => {
   const [isListening, setIsListening] = useState(false);
   const recognitionRef = useRef(null);
   const [error, setError] = useState(null);
+  const shouldBeListening = useRef(false);
 
   useEffect(() => {
     const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
@@ -17,9 +18,30 @@ const useSpeechToText = (onTranscript) => {
     recognition.interimResults = true;
     recognition.lang = 'en-US';
 
-    recognition.onstart = () => setIsListening(true);
-    recognition.onend = () => setIsListening(false);
-    recognition.onerror = (event) => setError(event.error);
+    recognition.onstart = () => {
+      setIsListening(true);
+      setError(null);
+    };
+
+    recognition.onend = () => {
+      setIsListening(false);
+      // Auto-restart if it should be listening
+      if (shouldBeListening.current) {
+        try {
+          recognition.start();
+        } catch (err) {
+          console.error('Failed to auto-restart recognition:', err);
+        }
+      }
+    };
+
+    recognition.onerror = (event) => {
+      if (event.error === 'no-speech') return; // Ignore no-speech error
+      setError(event.error);
+      if (event.error === 'not-allowed') {
+        shouldBeListening.current = false;
+      }
+    };
     
     recognition.onresult = (event) => {
       let interimTranscript = '';
@@ -33,17 +55,23 @@ const useSpeechToText = (onTranscript) => {
         }
       }
 
-      if (finalTranscript && onTranscript) {
-        onTranscript(finalTranscript);
+      // Pass both for faster response
+      if (onTranscript) {
+        onTranscript(finalTranscript || interimTranscript, !!finalTranscript);
       }
     };
 
     recognitionRef.current = recognition;
+    
+    return () => {
+      shouldBeListening.current = false;
+      if (recognitionRef.current) recognitionRef.current.stop();
+    };
   }, [onTranscript]);
 
   const startListening = useCallback(() => {
+    shouldBeListening.current = true;
     if (recognitionRef.current && !isListening) {
-      setError(null);
       try {
         recognitionRef.current.start();
       } catch (err) {
@@ -53,10 +81,11 @@ const useSpeechToText = (onTranscript) => {
   }, [isListening]);
 
   const stopListening = useCallback(() => {
-    if (recognitionRef.current && isListening) {
+    shouldBeListening.current = false;
+    if (recognitionRef.current) {
       recognitionRef.current.stop();
     }
-  }, [isListening]);
+  }, []);
 
   return { isListening, startListening, stopListening, error };
 };
