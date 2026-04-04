@@ -4,7 +4,7 @@ import {
   Gamepad2, Mic, MicOff, Trophy, X, SkipForward, Play,
   RotateCcw, Volume2, Settings, Info, CheckCircle2,
   Sparkles, Zap, BrainCircuit, Heart, User, Mail,
-  Clock, Award, Brain, HelpCircle
+  Clock, Award, Brain, HelpCircle, Home
 } from 'lucide-react';
 import useSpeechToText from './hooks/useSpeechToText';
 import useTextToSpeech from './hooks/useTextToSpeech';
@@ -30,6 +30,7 @@ const App = () => {
   // Game State
   const [gameState, setGameState] = useState('onboarding'); // onboarding, playing, results
   const [currentWordIndex, setCurrentWordIndex] = useState(0);
+  const [usedWords, setUsedWords] = useState([]);
   const [score, setScore] = useState({ correct: 0, wrong: 0, skipped: 0 });
   const [timeLeft, setTimeLeft] = useState(90);
   
@@ -82,7 +83,19 @@ const App = () => {
     setScore(prev => ({ ...prev, [type]: prev[type] + 1 }));
     setTranscript('');
     setLastAiGuess('');
-    setCurrentWordIndex(Math.floor(Math.random() * CHARADES_WORDS.length));
+    
+    let nextIndex;
+    let newUsedWords = [...usedWords, currentWordIndex];
+    if (newUsedWords.length >= CHARADES_WORDS.length) {
+      newUsedWords = []; // Reset if we run out of words
+    }
+    
+    do {
+      nextIndex = Math.floor(Math.random() * CHARADES_WORDS.length);
+    } while (newUsedWords.includes(nextIndex));
+    
+    setUsedWords(newUsedWords);
+    setCurrentWordIndex(nextIndex);
   };
 
   const processHint = (text, isFinal) => {
@@ -178,7 +191,9 @@ const App = () => {
   const startGame = () => {
     setShowHowToPlay(false);
     setGameState('playing');
-    setCurrentWordIndex(Math.floor(Math.random() * CHARADES_WORDS.length));
+    const startIndex = Math.floor(Math.random() * CHARADES_WORDS.length);
+    setCurrentWordIndex(startIndex);
+    setUsedWords([startIndex]);
   };
 
 
@@ -192,7 +207,7 @@ const App = () => {
       <div className="absolute top-6 left-6 z-50">
         <button
           onClick={() => setShowHowToPlay(true)}
-          className="p-3 bg-[var(--surface-secondary)] rounded-full text-text-muted hover:text-[var(--text)] transition-colors border border-glass-border flex items-center justify-center shadow-lg"
+          className="p-3 bg-gradient-to-br from-primary/20 to-secondary/20 hover:from-primary/40 hover:to-secondary/40 rounded-full text-primary hover:text-white transition-all transform hover:scale-110 border border-primary/30 flex items-center justify-center shadow-lg hover:shadow-primary/50"
           aria-label="How to Play"
         >
           <HelpCircle size={24} />
@@ -225,13 +240,13 @@ const App = () => {
             {/* Auth Tabs */}
             <div className="flex gap-2 w-full mb-8 bg-black/20 p-1.5 rounded-xl border border-glass-border">
                <button 
-                 className={`flex-1 py-3 rounded-lg font-bold text-xs sm:text-sm transition-all ${authMode === 'sign_in' ? 'bg-[var(--surface-secondary)] shadow-sm text-[var(--text)]' : 'text-text-muted hover:text-[var(--text)]'}`}
+                 className={`flex-1 py-3 rounded-lg font-bold text-xs sm:text-sm transition-all ${authMode === 'sign_in' ? 'bg-gradient-to-r from-primary to-secondary shadow-lg text-white scale-[1.02]' : 'text-text-muted hover:text-[var(--text)] hover:bg-white/5'}`}
                  onClick={() => { setAuthMode('sign_in'); setAuthError(''); }}
                >
                  SIGN IN
                </button>
                <button 
-                 className={`flex-1 py-3 rounded-lg font-bold text-xs sm:text-sm transition-all ${authMode === 'sign_up' ? 'bg-[var(--surface-secondary)] shadow-sm text-[var(--text)]' : 'text-text-muted hover:text-[var(--text)]'}`}
+                 className={`flex-1 py-3 rounded-lg font-bold text-xs sm:text-sm transition-all ${authMode === 'sign_up' ? 'bg-gradient-to-r from-secondary to-accent shadow-lg text-white scale-[1.02]' : 'text-text-muted hover:text-[var(--text)] hover:bg-white/5'}`}
                  onClick={() => { setAuthMode('sign_up'); setAuthError(''); }}
                >
                  SIGN UP
@@ -453,11 +468,15 @@ const App = () => {
               </div>
             </div>
 
-            <div className="bg-[var(--surface-secondary)] px-6 py-5 rounded-2xl mb-8 flex justify-between items-center border border-glass-border w-full shadow-lg">
-              <span className="text-text-muted font-black text-xs sm:text-sm tracking-widest">TOTAL POINTS</span>
-              <span className="text-2xl sm:text-4xl font-black text-[var(--text)] leading-none text-transparent bg-clip-text bg-gradient-to-r from-accent to-secondary">
-                {(score.correct * 100).toLocaleString()}
-              </span>
+            <div className="flex flex-col gap-4 mb-8 w-full">
+              <div className="bg-[var(--surface-secondary)] py-3 px-6 rounded-2xl flex items-center justify-center border border-glass-border shadow-sm">
+                 <span className="text-text-muted font-black text-xs sm:text-sm tracking-widest">TOTAL POINTS</span>
+              </div>
+              <div className="bg-black/20 py-6 px-6 rounded-2xl flex items-center justify-center border border-glass-border shadow-inner">
+                 <span className="text-5xl sm:text-6xl font-black text-[var(--text)] leading-none text-transparent bg-clip-text bg-gradient-to-r from-accent via-secondary to-primary drop-shadow-lg">
+                   {((score.correct * 100) - (score.wrong * 50)).toLocaleString()}
+                 </span>
+              </div>
             </div>
 
             <div className="flex gap-4 w-full">
@@ -469,8 +488,9 @@ const App = () => {
                   setIsVoiceConnected(false);
                   setIsAuthenticated(false);
                 }}
-                className="flex-[1] py-4 px-2 rounded-xl bg-[var(--surface-secondary)] text-[var(--text)] font-bold hover:opacity-80 transition-all border border-glass-border shadow-md"
+                className="flex-[1] flex items-center justify-center gap-2 py-4 px-2 rounded-xl bg-gradient-to-br from-[var(--surface-secondary)] to-black/40 text-[var(--text)] font-bold hover:from-white/10 hover:to-white/5 transition-all border border-glass-border shadow-md transform hover:scale-[1.02]"
               >
+                <Home size={20} className="text-text-muted" />
                 Home
               </button>
               <button
@@ -479,7 +499,9 @@ const App = () => {
                   setTimeLeft(90);
                   setScore({ correct: 0, wrong: 0, skipped: 0 });
                   setIsVoiceConnected(false);
-                  setCurrentWordIndex(Math.floor(Math.random() * CHARADES_WORDS.length));
+                  const startIndex = Math.floor(Math.random() * CHARADES_WORDS.length);
+                  setCurrentWordIndex(startIndex);
+                  setUsedWords([startIndex]);
                 }}
                 className="flex-[2] btn-primary shadow-lg"
               >
@@ -554,8 +576,8 @@ const App = () => {
                 <div className="how-to-step">
                   <div className="step-icon bg-danger/20 text-danger"><X size={24} /></div>
                   <div>
-                    <h4 className="text-[var(--text)] font-bold mb-1">Wrong (0 pts)</h4>
-                    <p className="text-xs text-text-muted leading-relaxed">If you accidentally say the word or the AI gives up, tap Wrong.</p>
+                    <h4 className="text-[var(--text)] font-bold mb-1">Wrong (-50 pts)</h4>
+                    <p className="text-xs text-text-muted leading-relaxed">If you accidentally say the word or the AI gives up, tap Wrong. Watch out, you lose 50 points!</p>
                   </div>
                 </div>
               </div>
