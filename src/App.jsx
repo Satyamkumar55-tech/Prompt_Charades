@@ -53,7 +53,7 @@ const App = () => {
   const handleTranscript = (text, isFinal) => {
     setTranscript(text);
     if (text.trim().length > 2 && isVoiceConnected) {
-      processHint(text);
+      processHint(text, isFinal);
     }
   };
 
@@ -85,7 +85,7 @@ const App = () => {
     setCurrentWordIndex(Math.floor(Math.random() * CHARADES_WORDS.length));
   };
 
-  const processHint = (text) => {
+  const processHint = (text, isFinal) => {
     // Prevent the mic from capturing the AI's own intro speech
     if (text.toLowerCase().includes("ready to play")) return;
 
@@ -124,8 +124,8 @@ const App = () => {
         speak(`Is it a ${currentWordData.word}?`);
         setIsThinking(false);
       }, 600);
-    } else if (!match && !isThinking && !isSpeaking) {
-      // Fallback response for unhelpful hints
+    } else if (!match && !isThinking && !isSpeaking && isFinal) {
+      // Fallback response ONLY when user finishes speaking (isFinal)
       setIsThinking(true);
       setTimeout(() => {
         const fallbackTalk = "Didn't get that.";
