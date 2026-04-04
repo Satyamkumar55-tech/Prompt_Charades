@@ -5,6 +5,8 @@ const useTextToSpeech = () => {
   const [voices, setVoices] = useState([]);
   const synthesisRef = useRef(window.speechSynthesis);
 
+  const utteranceRef = useRef(null);
+
   const loadVoices = useCallback(() => {
     const availableVoices = synthesisRef.current.getVoices();
     setVoices(availableVoices);
@@ -26,23 +28,30 @@ const useTextToSpeech = () => {
 
     synthesisRef.current.cancel(); // Cancel any existing speech
 
-    const utterance = new SpeechSynthesisUtterance(text);
-    
-    // Select voice - try to find preferred, then any US English, then first available
-    const voice = voices.find(v => v.name.includes(preferredVoiceName)) || 
-                  voices.find(v => v.name.includes('English') && v.name.includes('US')) ||
-                  voices[0];
-                  
-    if (voice) utterance.voice = voice;
-    
-    utterance.pitch = 1.0; 
-    utterance.rate = 1.0;
+    setTimeout(() => {
+      const utterance = new SpeechSynthesisUtterance(text);
+      utteranceRef.current = utterance; // Prevent garbage collection bug in Chrome
+      
+      // Select voice - try to find preferred, then any US English, then first available
+      const voice = voices.find(v => v.name.includes(preferredVoiceName)) || 
+                    voices.find(v => v.name.toLowerCase().includes('english') && v.name.includes('US')) ||
+                    voices.find(v => v.lang.includes('en-US')) ||
+                    voices[0];
+                    
+      if (voice) utterance.voice = voice;
+      
+      utterance.pitch = 1.0; 
+      utterance.rate = 1.0;
 
-    utterance.onstart = () => setIsSpeaking(true);
-    utterance.onend = () => setIsSpeaking(false);
-    utterance.onerror = () => setIsSpeaking(false);
+      utterance.onstart = () => setIsSpeaking(true);
+      utterance.onend = () => setIsSpeaking(false);
+      utterance.onerror = (e) => {
+        console.error('SpeechSynthesis Error:', e);
+        setIsSpeaking(false);
+      };
 
-    synthesisRef.current.speak(utterance);
+      synthesisRef.current.speak(utterance);
+    }, 50); // Small delay fixes a Chrome bug where cancel() also cancels the new utterance
   }, [voices]);
 
   const cancelSpeech = useCallback(() => {

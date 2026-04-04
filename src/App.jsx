@@ -13,15 +13,33 @@ import ThemeToggle from './components/ThemeToggle';
 
 const App = () => {
   // Theme State
-  const [theme, setTheme] = useState('dark'); // Fixed to dark for this UI
+  const [theme, setTheme] = useState('dark');
+
+  useEffect(() => {
+    if (theme === 'light') {
+      document.documentElement.classList.add('light');
+    } else {
+      document.documentElement.classList.remove('light');
+    }
+  }, [theme]);
+
+  const toggleTheme = () => {
+    setTheme(prev => prev === 'dark' ? 'light' : 'dark');
+  };
 
   // Game State
   const [gameState, setGameState] = useState('onboarding'); // onboarding, playing, results
   const [currentWordIndex, setCurrentWordIndex] = useState(0);
   const [score, setScore] = useState({ correct: 0, wrong: 0, skipped: 0 });
   const [timeLeft, setTimeLeft] = useState(90);
+  
+  // Auth State
+  const [authMode, setAuthMode] = useState('sign_in'); // 'sign_in' or 'sign_up'
   const [userName, setUserName] = useState('');
   const [userEmail, setUserEmail] = useState('');
+  const [authError, setAuthError] = useState('');
+
+  // Voice State
   const [transcript, setTranscript] = useState('');
   const [lastAiGuess, setLastAiGuess] = useState('');
   const [isThinking, setIsThinking] = useState(false);
@@ -31,12 +49,12 @@ const App = () => {
   // Hooks
   const { speak, isSpeaking, cancelSpeech } = useTextToSpeech();
 
-  const handleTranscript = useCallback((text, isFinal) => {
+  const handleTranscript = (text, isFinal) => {
     setTranscript(text);
     if (text.trim().length > 2 && isVoiceConnected) {
       processHint(text);
     }
-  }, [isVoiceConnected]);
+  };
 
   const { isListening, startListening, stopListening, error: speechError } = useSpeechToText(handleTranscript);
 
@@ -56,7 +74,7 @@ const App = () => {
   const connectVoice = () => {
     setIsVoiceConnected(true);
     startListening();
-    speak(`Ready ${userName || 'Player'}? Describe your first word now!`);
+    speak(`ready to play give me your first hint`);
   };
 
   const nextWord = (type) => {
@@ -74,7 +92,16 @@ const App = () => {
 
     // Check if the word itself is said (against the rules, but AI should acknowledge)
     if (userText.includes(currentWordData.word.toLowerCase())) {
-      return; // Don't guess if they just said the word
+       if (!isThinking && !isSpeaking) {
+          setIsThinking(true);
+          setTimeout(() => {
+             const guess = `You just said ${currentWordData.word}!`;
+             setLastAiGuess(guess);
+             speak(`Hey, you aren't allowed to say ${currentWordData.word}! That's the word!`);
+             setIsThinking(false);
+          }, 600);
+       }
+       return;
     }
 
     const match = currentWordData.keywords.find(keyword =>
@@ -90,8 +117,68 @@ const App = () => {
         speak(`Is it a ${currentWordData.word}?`);
         setIsThinking(false);
       }, 600);
+    } else if (!match && !isThinking && !isSpeaking) {
+      // Fallback response for unhelpful hints
+      setIsThinking(true);
+      setTimeout(() => {
+        const fallbacks = [
+          "Hmm, that's tricky.", 
+          "Can you give me another hint?", 
+          "I'm still thinking.", 
+          "Not ringing a bell.",
+          "Tell me more."
+        ];
+        const fallbackTalk = fallbacks[Math.floor(Math.random() * fallbacks.length)];
+        setLastAiGuess(fallbackTalk);
+        speak(fallbackTalk);
+        setIsThinking(false);
+      }, 600);
     }
   };
+
+  const isValidEmail = (email) => /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email);
+
+  const handleAuth = () => {
+    setAuthError('');
+    if (authMode === 'sign_up' && !userName.trim()) {
+      setAuthError("Name is required to sign up.");
+      return;
+    }
+    if (!userEmail.trim()) {
+      setAuthError("Email is required.");
+      return;
+    }
+    if (!isValidEmail(userEmail)) {
+      setAuthError("Please enter a valid email address.");
+      return;
+    }
+
+    const existingUsers = JSON.parse(localStorage.getItem('charadesUsers') || '{}');
+
+    if (authMode === 'sign_up') {
+      if (existingUsers[userEmail]) {
+         setAuthError("Email already registered. Please Sign In.");
+         return;
+      }
+      existingUsers[userEmail] = { name: userName };
+      localStorage.setItem('charadesUsers', JSON.stringify(existingUsers));
+      setShowHowToPlay(true);
+    } else {
+      if (!existingUsers[userEmail]) {
+         setAuthError("Email not found. Please Sign Up.");
+         return;
+      }
+      setUserName(existingUsers[userEmail].name);
+      setShowHowToPlay(true);
+    }
+  };
+
+  const startGame = () => {
+    setShowHowToPlay(false);
+    setGameState('playing');
+    setCurrentWordIndex(Math.floor(Math.random() * CHARADES_WORDS.length));
+  };
+
 
   const currentWord = CHARADES_WORDS[currentWordIndex]?.word || "Game Over";
 
@@ -99,13 +186,17 @@ const App = () => {
     <div className="flex-1 flex flex-col items-center justify-center p-6 relative overflow-hidden">
       <div className="app-bg" />
 
-      {/* Help Icon */}
-      <button
-        onClick={() => setShowHowToPlay(true)}
-        className="fixed top-6 right-6 p-3 bg-surface-secondary rounded-full text-text-muted hover:text-white transition-colors border border-glass-border"
-      >
-        <HelpCircle size={24} />
-      </button>
+      {/* Top Controls */}
+      <div className="fixed top-6 right-6 z-50 flex items-center gap-4">
+        <ThemeToggle theme={theme} toggleTheme={toggleTheme} />
+        <button
+          onClick={() => setShowHowToPlay(true)}
+          className="p-3 bg-surface-secondary rounded-full text-text-muted hover:text-[var(--text)] transition-colors border border-glass-border flex items-center justify-center shadow-lg"
+          aria-label="How to Play"
+        >
+          <HelpCircle size={24} />
+        </button>
+      </div>
 
       <AnimatePresence mode="wait">
 
@@ -122,26 +213,44 @@ const App = () => {
               <Gamepad2 className="text-secondary" size={40} />
             </div>
 
-            <h1 className="text-5xl mb-2 font-black tracking-tighter text-white">Prompt Charades</h1>
+            <h1 className="text-5xl mb-2 font-black tracking-tighter text-[var(--text)]">Prompt Charades</h1>
             <p className="text-text-muted mb-10 text-lg font-medium opacity-80">Charades Meets AI: Guess Smarter, Play Faster!</p>
 
-            <div className="w-full space-y-6 mb-10">
-              <div className="text-left">
-                <label className="block text-[10px] font-black uppercase tracking-[0.2em] text-white/60 mb-3 ml-1">Your Name</label>
-                <div className="input-container">
-                  <User className="input-icon" size={20} />
-                  <input
-                    type="text"
-                    placeholder="Enter your name"
-                    className="input-field input-with-icon"
-                    value={userName}
-                    onChange={(e) => setUserName(e.target.value)}
-                  />
+            {/* Auth Tabs */}
+            <div className="flex gap-2 w-full mb-8 bg-black/20 p-1.5 rounded-xl">
+               <button 
+                 className={`flex-1 py-3 rounded-lg font-bold text-sm transition-all ${authMode === 'sign_in' ? 'bg-[var(--surface-secondary)] shadow-sm text-[var(--text)]' : 'text-text-muted hover:text-[var(--text)]'}`}
+                 onClick={() => { setAuthMode('sign_in'); setAuthError(''); }}
+               >
+                 SIGN IN
+               </button>
+               <button 
+                 className={`flex-1 py-3 rounded-lg font-bold text-sm transition-all ${authMode === 'sign_up' ? 'bg-[var(--surface-secondary)] shadow-sm text-[var(--text)]' : 'text-text-muted hover:text-[var(--text)]'}`}
+                 onClick={() => { setAuthMode('sign_up'); setAuthError(''); }}
+               >
+                 SIGN UP
+               </button>
+            </div>
+
+            <div className="w-full space-y-6 mb-6">
+              {authMode === 'sign_up' && (
+                <div className="text-left">
+                  <label className="block text-[10px] font-black uppercase tracking-[0.2em] opacity-60 mb-3 ml-1 text-[var(--text)]">Your Name</label>
+                  <div className="input-container">
+                    <User className="input-icon" size={20} />
+                    <input
+                      type="text"
+                      placeholder="Enter your name"
+                      className="input-field input-with-icon"
+                      value={userName}
+                      onChange={(e) => setUserName(e.target.value)}
+                    />
+                  </div>
                 </div>
-              </div>
+              )}
 
               <div className="text-left">
-                <label className="block text-[10px] font-black uppercase tracking-[0.2em] text-white/60 mb-3 ml-1">Email Address</label>
+                <label className="block text-[10px] font-black uppercase tracking-[0.2em] opacity-60 mb-3 ml-1 text-[var(--text)]">Email Address</label>
                 <div className="input-container">
                   <Mail className="input-icon" size={20} />
                   <input
@@ -155,19 +264,29 @@ const App = () => {
               </div>
             </div>
 
+            <div className="h-6 mb-4 w-full text-center">
+              <AnimatePresence>
+                {authError && (
+                  <motion.p 
+                    initial={{ opacity: 0, y: -10 }} 
+                    animate={{ opacity: 1, y: 0 }} 
+                    exit={{ opacity: 0 }} 
+                    className="text-danger text-sm font-bold"
+                  >
+                    {authError}
+                  </motion.p>
+                )}
+              </AnimatePresence>
+            </div>
+
             <button
-              onClick={() => {
-                setGameState('playing');
-                setCurrentWordIndex(Math.floor(Math.random() * CHARADES_WORDS.length));
-              }}
-              disabled={!userName || !userEmail}
+              onClick={handleAuth}
               className="btn-primary w-full"
             >
               <Sparkles size={20} />
-              Let's Play!
+              {authMode === 'sign_in' ? 'Sign In' : 'Create Account'}
             </button>
 
-            <p className="mt-8 text-[11px] font-bold text-white/40 tracking-wider">90 seconds • 100 points per correct answer</p>
           </motion.div>
         )}
 
@@ -180,15 +299,15 @@ const App = () => {
             animate={{ opacity: 1, y: 0 }}
           >
             {/* Header / Timer HUD */}
-            <div className="hud-timer text-center shadow-2xl">
+            <div className="hud-timer shadow-2xl">
               <div className="flex justify-between items-center mb-1">
-                <div className="flex items-center gap-2 text-white font-bold">
+                <div className="flex items-center gap-2 text-[var(--text)] font-bold">
                   <Clock size={20} className="text-secondary" />
                   <span className="text-lg">
                     {isVoiceConnected ? "Time Left" : "Connect Voice to Start"}
                   </span>
                 </div>
-                <div className="text-3xl font-black font-mono text-white">
+                <div className="text-3xl font-black font-mono text-[var(--text)]">
                   {Math.floor(timeLeft / 60)}:{(timeLeft % 60).toString().padStart(2, '0')}
                 </div>
               </div>
@@ -201,7 +320,7 @@ const App = () => {
                 />
               </div>
 
-              <p className="text-[10px] text-text-muted font-bold uppercase tracking-wider">
+              <p className="text-[10px] text-text-muted font-bold uppercase tracking-wider text-center">
                 Timer starts when you connect the voice agent
               </p>
             </div>
@@ -257,10 +376,10 @@ const App = () => {
                       key={lastAiGuess}
                       initial={{ scale: 0.5, opacity: 0 }}
                       animate={{ scale: 1, opacity: 1 }}
-                      className="bg-white/5 border border-white/10 rounded-[2rem] px-10 py-6 flex items-center gap-4 shadow-xl"
+                      className="bg-black/10 border border-glass-border rounded-[2rem] px-10 py-6 flex items-center gap-4 shadow-xl max-w-full"
                     >
-                      <Volume2 className="text-primary" size={32} />
-                      <span className="text-4xl font-black text-white italic tracking-tighter">"{lastAiGuess}"</span>
+                      <Volume2 className="text-primary shrink-0" size={32} />
+                      <span className="text-2xl sm:text-4xl font-black text-[var(--text)] italic tracking-tighter truncate">"{lastAiGuess}"</span>
                     </motion.div>
                   )}
                 </AnimatePresence>
@@ -310,7 +429,7 @@ const App = () => {
               <Trophy size={48} className="text-accent" />
             </div>
 
-            <h2 className="text-5xl font-black text-white mb-2">GAME OVER</h2>
+            <h2 className="text-5xl font-black text-[var(--text)] mb-2">GAME OVER</h2>
             <p className="text-text-muted uppercase font-black tracking-widest text-xs mb-10">Mission Summary</p>
 
             <div className="grid grid-cols-3 gap-4 mb-10">
@@ -328,9 +447,9 @@ const App = () => {
               </div>
             </div>
 
-            <div className="bg-white/5 p-6 rounded-2xl mb-8 flex justify-between items-center">
+            <div className="bg-[var(--surface-secondary)] p-6 rounded-2xl mb-8 flex justify-between items-center border border-glass-border">
               <span className="text-text-muted font-bold text-sm">TOTAL POINTS</span>
-              <span className="text-3xl font-black text-white">{(score.correct * 100).toLocaleString()}</span>
+              <span className="text-3xl font-black text-[var(--text)]">{(score.correct * 100).toLocaleString()}</span>
             </div>
 
             <div className="flex gap-4">
@@ -341,9 +460,9 @@ const App = () => {
                   setScore({ correct: 0, wrong: 0, skipped: 0 });
                   setIsVoiceConnected(false);
                 }}
-                className="flex-1 p-4 rounded-xl bg-surface-secondary text-white font-bold hover:bg-surface-secondary/80 transition-all"
+                className="flex-1 p-4 rounded-xl bg-surface-secondary text-[var(--text)] font-bold hover:opacity-80 transition-all border border-glass-border"
               >
-                Exit Game
+                Home
               </button>
               <button
                 onClick={() => {
@@ -389,48 +508,59 @@ const App = () => {
                   <Trophy size={28} />
                 </div>
                 <div>
-                  <h3 className="text-2xl font-black text-white">How to Play</h3>
+                  <h3 className="text-2xl font-black text-[var(--text)]">How to Play</h3>
                   <p className="text-xs font-bold text-text-muted">Master the rules, win the game!</p>
                 </div>
               </div>
 
-              <div className="space-y-4">
+              <div className="space-y-4 mb-8">
                 <div className="how-to-step">
                   <div className="step-icon bg-primary/20 text-primary"><Mic size={24} /></div>
                   <div>
-                    <h4 className="text-white font-bold mb-1">Connect Voice Agent</h4>
+                    <h4 className="text-[var(--text)] font-bold mb-1">Connect Voice Agent</h4>
                     <p className="text-xs text-text-muted leading-relaxed">First, connect the AI voice agent. The 90-second timer starts when you connect!</p>
                   </div>
                 </div>
                 <div className="how-to-step">
                   <div className="step-icon bg-secondary/20 text-secondary"><Clock size={24} /></div>
                   <div>
-                    <h4 className="text-white font-bold mb-1">90 Seconds</h4>
+                    <h4 className="text-[var(--text)] font-bold mb-1">90 Seconds</h4>
                     <p className="text-xs text-text-muted leading-relaxed">Once connected, you have 90 seconds to get through as many words as possible.</p>
                   </div>
                 </div>
                 <div className="how-to-step">
                   <div className="step-icon bg-accent/20 text-accent"><Play size={24} /></div>
                   <div>
-                    <h4 className="text-white font-bold mb-1">Give Hints</h4>
+                    <h4 className="text-[var(--text)] font-bold mb-1">Give Hints</h4>
                     <p className="text-xs text-text-muted leading-relaxed">Describe the word to the AI without saying it. The AI will try to guess!</p>
                   </div>
                 </div>
                 <div className="how-to-step">
                   <div className="step-icon bg-success/20 text-success"><CheckCircle2 size={24} /></div>
                   <div>
-                    <h4 className="text-white font-bold mb-1">Correct (+100 pts)</h4>
+                    <h4 className="text-[var(--text)] font-bold mb-1">Correct (+100 pts)</h4>
                     <p className="text-xs text-text-muted leading-relaxed">Tap Correct when the AI guesses right. Each correct answer = 100 points!</p>
                   </div>
                 </div>
                 <div className="how-to-step">
                   <div className="step-icon bg-danger/20 text-danger"><X size={24} /></div>
                   <div>
-                    <h4 className="text-white font-bold mb-1">Wrong (0 pts)</h4>
+                    <h4 className="text-[var(--text)] font-bold mb-1">Wrong (0 pts)</h4>
                     <p className="text-xs text-text-muted leading-relaxed">If you accidentally say the word or the AI gives up, tap Wrong.</p>
                   </div>
                 </div>
               </div>
+
+              {/* Start Game Button Moved here */}
+              {gameState === 'onboarding' && (
+                <button
+                  onClick={startGame}
+                  className="btn-primary w-full shadow-xl"
+                >
+                  <Sparkles size={20} />
+                  Let's Play!
+                </button>
+              )}
             </motion.div>
           </motion.div>
         )}

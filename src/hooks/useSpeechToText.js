@@ -5,8 +5,13 @@ const useSpeechToText = (onTranscript) => {
   const recognitionRef = useRef(null);
   const [error, setError] = useState(null);
   const shouldBeListening = useRef(false);
-
+  
+  const onTranscriptRef = useRef(onTranscript);
   useEffect(() => {
+    onTranscriptRef.current = onTranscript;
+  }, [onTranscript]);
+
+  const initRecognition = useCallback(() => {
     const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
     if (!SpeechRecognition) {
       setError('Speech Recognition is not supported in this browser.');
@@ -56,18 +61,21 @@ const useSpeechToText = (onTranscript) => {
       }
 
       // Pass both for faster response
-      if (onTranscript) {
-        onTranscript(finalTranscript || interimTranscript, !!finalTranscript);
+      if (onTranscriptRef.current) {
+        onTranscriptRef.current(finalTranscript || interimTranscript, !!finalTranscript);
       }
     };
 
     recognitionRef.current = recognition;
-    
+  }, []);
+
+  useEffect(() => {
+    initRecognition();
     return () => {
       shouldBeListening.current = false;
       if (recognitionRef.current) recognitionRef.current.stop();
     };
-  }, [onTranscript]);
+  }, [initRecognition]);
 
   const startListening = useCallback(() => {
     shouldBeListening.current = true;
@@ -75,10 +83,12 @@ const useSpeechToText = (onTranscript) => {
       try {
         recognitionRef.current.start();
       } catch (err) {
-        console.error('Failed to start recognition:', err);
+        // Recognition might already be started or in a weird state, re-init
+        initRecognition();
+        setTimeout(() => recognitionRef.current?.start(), 100);
       }
     }
-  }, [isListening]);
+  }, [isListening, initRecognition]);
 
   const stopListening = useCallback(() => {
     shouldBeListening.current = false;

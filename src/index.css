@@ -59,6 +59,8 @@ body {
   height: 100vh;
   display: flex;
   flex-direction: column;
+  align-items: center;
+  justify-content: center;
 }
 
 /* Glass & Card Styling */
@@ -309,4 +311,61 @@ body {
 .modal-content::-webkit-scrollbar-thumb {
   background: #333;
   border-radius: 10px;
+}
+
+/* Light Theme Overrides */
+:root.light {
+  --background: #fdf4ff;
+  --bg-gradient: radial-gradient(circle at 10% 20%, #fbcfe8 0%, transparent 40%),
+                 radial-gradient(circle at 90% 80%, #fed7aa 0%, transparent 40%),
+                 radial-gradient(circle at 50% 50%, #f3e8ff 0%, transparent 80%);
+                 
+  --surface: #ffffff;
+  --surface-secondary: #f8fafc;
+  
+  --primary: #d946ef;
+  --primary-hover: #c026d3;
+  --secondary: #ea580c;
+  
+  --text: #1e1b4b;
+  --text-muted: #64748b;
+  
+  --glass-border: rgba(0, 0, 0, 0.1);
+  --glass-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.1);
+}
+
+:root.light body {
+  background-color: var(--background);
+}
+
+:root.light .input-field {
+  background: #f8fafc;
+  border-color: #e2e8f0;
+  color: #0f172a;
+}
+
+:root.light .input-field:focus {
+  background: white;
+}
+
+:root.light .how-to-step {
+  background: #f8fafc;
+  border: 1px solid var(--glass-border);
+}
+
+:root.light .modal-content::-webkit-scrollbar-thumb {
+  background: #cbd5e1;
+}
+
+.theme-switch-btn {
+  background: var(--surface-secondary);
+  border: 1px solid var(--glass-border);
+  color: var(--text);
+  padding: 0.75rem;
+  border-radius: 99px;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  box-shadow: 0 4px 6px rgba(0,0,0,0.1);
 }
