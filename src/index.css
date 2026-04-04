@@ -71,7 +71,6 @@ body {
   box-shadow: var(--glass-shadow);
   padding: 3.5rem;
   width: 100%;
-  max-width: 580px;
   text-align: center;
 }
 

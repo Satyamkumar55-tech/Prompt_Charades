@@ -228,7 +228,7 @@ const App = () => {
             initial={{ opacity: 0, scale: 0.9 }}
             animate={{ opacity: 1, scale: 1 }}
             exit={{ opacity: 0, scale: 1.1 }}
-            className="card-main flex flex-col items-center w-full max-w-[500px]"
+            className="card-main flex flex-col items-center w-full max-w-[90%] sm:max-w-[500px] md:max-w-[600px] lg:max-w-[700px]"
           >
             <div className="w-20 h-20 bg-[var(--surface-secondary)] rounded-[1.5rem] flex items-center justify-center mb-6 border border-glass-border">
               <Gamepad2 className="text-secondary" size={40} />
@@ -256,13 +256,12 @@ const App = () => {
             <div className="w-full space-y-6 mb-6">
               {authMode === 'sign_up' && (
                 <div className="text-left w-full">
-                  <label className="block text-[10px] font-black uppercase tracking-[0.2em] opacity-60 mb-2 ml-1 text-[var(--text)]">Your Name</label>
+                  <label className="block text-xs font-bold mb-2 text-[var(--text)]">Your Name</label>
                   <div className="input-container w-full">
-                    <User className="input-icon" size={20} />
                     <input
                       type="text"
                       placeholder="Enter your name"
-                      className="input-field input-with-icon w-full"
+                      className="input-field w-full"
                       value={userName}
                       onChange={(e) => setUserName(e.target.value)}
                     />
@@ -271,13 +270,12 @@ const App = () => {
               )}
 
               <div className="text-left w-full">
-                <label className="block text-[10px] font-black uppercase tracking-[0.2em] opacity-60 mb-2 ml-1 text-[var(--text)]">Email Address</label>
+                <label className="block text-xs font-bold mb-2 text-[var(--text)]">Email Address</label>
                 <div className="input-container w-full">
-                  <Mail className="input-icon" size={20} />
                   <input
                     type="email"
                     placeholder="Enter your email"
-                    className="input-field input-with-icon w-full"
+                    className="input-field w-full"
                     value={userEmail}
                     onChange={(e) => setUserEmail(e.target.value)}
                   />
@@ -302,12 +300,11 @@ const App = () => {
 
             <button
               onClick={handleAuth}
-              className="btn-primary w-full"
+              className="btn-primary w-full shadow-lg h-14"
             >
               <Sparkles size={20} />
               {authMode === 'sign_in' ? 'Sign In' : 'Create Account'}
             </button>
-
           </motion.div>
         )}
 
@@ -442,7 +439,7 @@ const App = () => {
         {gameState === 'results' && (
           <motion.div
             key="results"
-            className="card-main w-full max-w-[550px] flex flex-col items-center"
+            className="card-main w-full max-w-[90%] sm:max-w-[550px] md:max-w-[700px] flex flex-col items-center"
             initial={{ opacity: 0, scale: 0.9 }}
             animate={{ opacity: 1, scale: 1 }}
           >
@@ -453,18 +450,18 @@ const App = () => {
             <h2 className="text-4xl sm:text-5xl font-black text-[var(--text)] mb-2 text-center">GAME OVER</h2>
             <p className="text-text-muted uppercase font-black tracking-widest text-[10px] sm:text-xs mb-8 text-center bg-black/20 px-4 py-1.5 rounded-full border border-glass-border">Mission Summary</p>
 
-            <div className="grid grid-cols-3 gap-3 sm:gap-4 mb-8 w-full">
-              <div className="bg-[var(--surface-secondary)] p-4 sm:p-6 rounded-2xl border border-glass-border flex flex-col items-center justify-center shadow-lg">
-                <span className="text-2xl sm:text-3xl font-black text-success leading-none">{score.correct}</span>
-                <p className="text-[9px] sm:text-[10px] text-text-muted font-black uppercase mt-2 text-center">Correct</p>
+            <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 sm:gap-6 mb-8 w-full">
+              <div className="bg-[var(--surface-secondary)] p-6 rounded-2xl border border-glass-border flex flex-col items-center justify-center shadow-lg w-full">
+                <span className="text-3xl sm:text-4xl font-black text-success leading-none">{score.correct}</span>
+                <p className="text-xs sm:text-sm text-text-muted font-black uppercase mt-2 text-center">Correct</p>
               </div>
-              <div className="bg-[var(--surface-secondary)] p-4 sm:p-6 rounded-2xl border border-glass-border flex flex-col items-center justify-center shadow-lg">
-                <span className="text-2xl sm:text-3xl font-black text-danger leading-none">{score.wrong}</span>
-                <p className="text-[9px] sm:text-[10px] text-text-muted font-black uppercase mt-2 text-center">Wrong</p>
+              <div className="bg-[var(--surface-secondary)] p-6 rounded-2xl border border-glass-border flex flex-col items-center justify-center shadow-lg w-full">
+                <span className="text-3xl sm:text-4xl font-black text-danger leading-none">{score.wrong}</span>
+                <p className="text-xs sm:text-sm text-text-muted font-black uppercase mt-2 text-center">Wrong</p>
               </div>
-              <div className="bg-[var(--surface-secondary)] p-4 sm:p-6 rounded-2xl border border-glass-border flex flex-col items-center justify-center shadow-lg">
-                <span className="text-2xl sm:text-3xl font-black text-accent leading-none">{score.skipped}</span>
-                <p className="text-[9px] sm:text-[10px] text-text-muted font-black uppercase mt-2 text-center">Skipped</p>
+              <div className="bg-[var(--surface-secondary)] p-6 rounded-2xl border border-glass-border flex flex-col items-center justify-center shadow-lg w-full">
+                <span className="text-3xl sm:text-4xl font-black text-accent leading-none">{score.skipped}</span>
+                <p className="text-xs sm:text-sm text-text-muted font-black uppercase mt-2 text-center">Skipped</p>
               </div>
             </div>
 
@@ -472,14 +469,14 @@ const App = () => {
               <div className="bg-[var(--surface-secondary)] py-3 px-6 rounded-2xl flex items-center justify-center border border-glass-border shadow-sm">
                  <span className="text-text-muted font-black text-xs sm:text-sm tracking-widest">TOTAL POINTS</span>
               </div>
-              <div className="bg-black/20 py-6 px-6 rounded-2xl flex items-center justify-center border border-glass-border shadow-inner">
-                 <span className="text-5xl sm:text-6xl font-black text-[var(--text)] leading-none text-transparent bg-clip-text bg-gradient-to-r from-accent via-secondary to-primary drop-shadow-lg">
+              <div className="bg-black/20 py-6 px-6 rounded-2xl flex items-center justify-center border border-glass-border shadow-inner w-full">
+                 <span className="text-5xl sm:text-6xl md:text-7xl font-black text-[var(--text)] leading-none text-transparent bg-clip-text bg-gradient-to-r from-accent via-secondary to-primary drop-shadow-lg text-center break-words w-full">
                    {((score.correct * 100) - (score.wrong * 50)).toLocaleString()}
                  </span>
               </div>
             </div>
 
-            <div className="flex gap-4 w-full">
+            <div className="flex flex-col sm:flex-row gap-4 w-full">
               <button
                 onClick={() => {
                   setGameState('onboarding');
@@ -488,7 +485,7 @@ const App = () => {
                   setIsVoiceConnected(false);
                   setIsAuthenticated(false);
                 }}
-                className="flex-[1] flex items-center justify-center gap-2 py-4 px-2 rounded-xl bg-gradient-to-br from-[var(--surface-secondary)] to-black/40 text-[var(--text)] font-bold hover:from-white/10 hover:to-white/5 transition-all border border-glass-border shadow-md transform hover:scale-[1.02]"
+                className="w-full sm:flex-[1] flex items-center justify-center gap-2 py-4 px-2 rounded-xl bg-gradient-to-br from-[var(--surface-secondary)] to-black/40 text-[var(--text)] font-bold hover:from-white/10 hover:to-white/5 transition-all border border-glass-border shadow-md transform hover:scale-[1.02]"
               >
                 <Home size={20} className="text-text-muted" />
                 Home
@@ -503,7 +500,7 @@ const App = () => {
                   setCurrentWordIndex(startIndex);
                   setUsedWords([startIndex]);
                 }}
-                className="flex-[2] btn-primary shadow-lg"
+                className="w-full sm:flex-[2] btn-primary shadow-lg"
               >
                 Play Again
               </button>
