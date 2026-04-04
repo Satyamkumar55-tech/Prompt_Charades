@@ -193,7 +193,7 @@ body {
 .word-display {
   font-size: 6rem;
   font-weight: 900;
-  color: white;
+  color: var(--text);
   letter-spacing: -2px;
   line-height: 1;
   margin: 1rem 0;

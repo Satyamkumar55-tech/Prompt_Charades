@@ -38,6 +38,7 @@ const App = () => {
   const [userName, setUserName] = useState('');
   const [userEmail, setUserEmail] = useState('');
   const [authError, setAuthError] = useState('');
+  const [isAuthenticated, setIsAuthenticated] = useState(false);
 
   // Voice State
   const [transcript, setTranscript] = useState('');
@@ -85,6 +86,9 @@ const App = () => {
   };
 
   const processHint = (text) => {
+    // Prevent the mic from capturing the AI's own intro speech
+    if (text.toLowerCase().includes("ready to play")) return;
+
     const currentWordData = CHARADES_WORDS[currentWordIndex];
     if (!currentWordData) return;
 
@@ -104,9 +108,12 @@ const App = () => {
        return;
     }
 
-    const match = currentWordData.keywords.find(keyword =>
-      userText.includes(keyword.toLowerCase())
-    );
+    // Advanced match: Only match if the keyword appears as a distinct word, 
+    // to prevent 'read' from matching inside 'ready'.
+    const match = currentWordData.keywords.find(keyword => {
+      const regex = new RegExp(`\\b${keyword.toLowerCase()}\\b`, 'i');
+      return regex.test(userText);
+    });
 
     if (match && !isThinking && !isSpeaking) {
       // AI "Thinking" state
@@ -121,14 +128,7 @@ const App = () => {
       // Fallback response for unhelpful hints
       setIsThinking(true);
       setTimeout(() => {
-        const fallbacks = [
-          "Hmm, that's tricky.", 
-          "Can you give me another hint?", 
-          "I'm still thinking.", 
-          "Not ringing a bell.",
-          "Tell me more."
-        ];
-        const fallbackTalk = fallbacks[Math.floor(Math.random() * fallbacks.length)];
+        const fallbackTalk = "Didn't get that.";
         setLastAiGuess(fallbackTalk);
         speak(fallbackTalk);
         setIsThinking(false);
@@ -162,6 +162,7 @@ const App = () => {
       }
       existingUsers[userEmail] = { name: userName };
       localStorage.setItem('charadesUsers', JSON.stringify(existingUsers));
+      setIsAuthenticated(true);
       setShowHowToPlay(true);
     } else {
       if (!existingUsers[userEmail]) {
@@ -169,6 +170,7 @@ const App = () => {
          return;
       }
       setUserName(existingUsers[userEmail].name);
+      setIsAuthenticated(true);
       setShowHowToPlay(true);
     }
   };
@@ -183,19 +185,23 @@ const App = () => {
   const currentWord = CHARADES_WORDS[currentWordIndex]?.word || "Game Over";
 
   return (
-    <div className="flex-1 flex flex-col items-center justify-center p-6 relative overflow-hidden">
+    <div className="w-full h-full flex flex-col items-center justify-center p-6 relative overflow-hidden">
       <div className="app-bg" />
 
-      {/* Top Controls */}
-      <div className="fixed top-6 right-6 z-50 flex items-center gap-4">
-        <ThemeToggle theme={theme} toggleTheme={toggleTheme} />
+      {/* Top Left Control - Help */}
+      <div className="absolute top-6 left-6 z-50">
         <button
           onClick={() => setShowHowToPlay(true)}
-          className="p-3 bg-surface-secondary rounded-full text-text-muted hover:text-[var(--text)] transition-colors border border-glass-border flex items-center justify-center shadow-lg"
+          className="p-3 bg-[var(--surface-secondary)] rounded-full text-text-muted hover:text-[var(--text)] transition-colors border border-glass-border flex items-center justify-center shadow-lg"
           aria-label="How to Play"
         >
           <HelpCircle size={24} />
         </button>
+      </div>
+
+      {/* Top Right Control - Theme */}
+      <div className="absolute top-6 right-6 z-50">
+        <ThemeToggle theme={theme} toggleTheme={toggleTheme} />
       </div>
 
       <AnimatePresence mode="wait">
@@ -207,25 +213,25 @@ const App = () => {
             initial={{ opacity: 0, scale: 0.9 }}
             animate={{ opacity: 1, scale: 1 }}
             exit={{ opacity: 0, scale: 1.1 }}
-            className="card-main flex flex-col items-center"
+            className="card-main flex flex-col items-center w-full max-w-[500px]"
           >
-            <div className="w-20 h-20 bg-surface-secondary rounded-[1.5rem] flex items-center justify-center mb-8 border border-glass-border">
+            <div className="w-20 h-20 bg-[var(--surface-secondary)] rounded-[1.5rem] flex items-center justify-center mb-6 border border-glass-border">
               <Gamepad2 className="text-secondary" size={40} />
             </div>
 
-            <h1 className="text-5xl mb-2 font-black tracking-tighter text-[var(--text)]">Prompt Charades</h1>
-            <p className="text-text-muted mb-10 text-lg font-medium opacity-80">Charades Meets AI: Guess Smarter, Play Faster!</p>
+            <h1 className="text-4xl sm:text-5xl mb-2 font-black tracking-tighter text-[var(--text)] text-center">Prompt Charades</h1>
+            <p className="text-text-muted mb-8 text-sm sm:text-base font-medium opacity-80 text-center">Charades Meets AI: Guess Smarter, Play Faster!</p>
 
             {/* Auth Tabs */}
-            <div className="flex gap-2 w-full mb-8 bg-black/20 p-1.5 rounded-xl">
+            <div className="flex gap-2 w-full mb-8 bg-black/20 p-1.5 rounded-xl border border-glass-border">
                <button 
-                 className={`flex-1 py-3 rounded-lg font-bold text-sm transition-all ${authMode === 'sign_in' ? 'bg-[var(--surface-secondary)] shadow-sm text-[var(--text)]' : 'text-text-muted hover:text-[var(--text)]'}`}
+                 className={`flex-1 py-3 rounded-lg font-bold text-xs sm:text-sm transition-all ${authMode === 'sign_in' ? 'bg-[var(--surface-secondary)] shadow-sm text-[var(--text)]' : 'text-text-muted hover:text-[var(--text)]'}`}
                  onClick={() => { setAuthMode('sign_in'); setAuthError(''); }}
                >
                  SIGN IN
                </button>
                <button 
-                 className={`flex-1 py-3 rounded-lg font-bold text-sm transition-all ${authMode === 'sign_up' ? 'bg-[var(--surface-secondary)] shadow-sm text-[var(--text)]' : 'text-text-muted hover:text-[var(--text)]'}`}
+                 className={`flex-1 py-3 rounded-lg font-bold text-xs sm:text-sm transition-all ${authMode === 'sign_up' ? 'bg-[var(--surface-secondary)] shadow-sm text-[var(--text)]' : 'text-text-muted hover:text-[var(--text)]'}`}
                  onClick={() => { setAuthMode('sign_up'); setAuthError(''); }}
                >
                  SIGN UP
@@ -234,14 +240,14 @@ const App = () => {
 
             <div className="w-full space-y-6 mb-6">
               {authMode === 'sign_up' && (
-                <div className="text-left">
-                  <label className="block text-[10px] font-black uppercase tracking-[0.2em] opacity-60 mb-3 ml-1 text-[var(--text)]">Your Name</label>
-                  <div className="input-container">
+                <div className="text-left w-full">
+                  <label className="block text-[10px] font-black uppercase tracking-[0.2em] opacity-60 mb-2 ml-1 text-[var(--text)]">Your Name</label>
+                  <div className="input-container w-full">
                     <User className="input-icon" size={20} />
                     <input
                       type="text"
                       placeholder="Enter your name"
-                      className="input-field input-with-icon"
+                      className="input-field input-with-icon w-full"
                       value={userName}
                       onChange={(e) => setUserName(e.target.value)}
                     />
@@ -249,14 +255,14 @@ const App = () => {
                 </div>
               )}
 
-              <div className="text-left">
-                <label className="block text-[10px] font-black uppercase tracking-[0.2em] opacity-60 mb-3 ml-1 text-[var(--text)]">Email Address</label>
-                <div className="input-container">
+              <div className="text-left w-full">
+                <label className="block text-[10px] font-black uppercase tracking-[0.2em] opacity-60 mb-2 ml-1 text-[var(--text)]">Email Address</label>
+                <div className="input-container w-full">
                   <Mail className="input-icon" size={20} />
                   <input
                     type="email"
                     placeholder="Enter your email"
-                    className="input-field input-with-icon"
+                    className="input-field input-with-icon w-full"
                     value={userEmail}
                     onChange={(e) => setUserEmail(e.target.value)}
                   />
@@ -264,11 +270,11 @@ const App = () => {
               </div>
             </div>
 
-            <div className="h-6 mb-4 w-full text-center">
+            <div className="h-6 mb-4 w-full text-center flex items-center justify-center">
               <AnimatePresence>
                 {authError && (
                   <motion.p 
-                    initial={{ opacity: 0, y: -10 }} 
+                    initial={{ opacity: 0, y: -5 }} 
                     animate={{ opacity: 1, y: 0 }} 
                     exit={{ opacity: 0 }} 
                     className="text-danger text-sm font-bold"
@@ -333,7 +339,7 @@ const App = () => {
                 key={currentWordIndex}
                 initial={{ opacity: 0, scale: 0.8 }}
                 animate={{ opacity: 1, scale: 1 }}
-                className="word-display"
+                className="word-display text-4xl sm:text-6xl"
               >
                 {currentWord}
               </motion.h2>
@@ -354,7 +360,7 @@ const App = () => {
                     ))}
                   </div>
                 ) : (
-                  transcript && <p className="text-text-muted italic text-sm">AI heard: "{transcript}"</p>
+                  transcript && <p className="text-text-muted italic text-sm text-center">AI heard: "{transcript}"</p>
                 )}
               </div>
             </div>
@@ -376,7 +382,7 @@ const App = () => {
                       key={lastAiGuess}
                       initial={{ scale: 0.5, opacity: 0 }}
                       animate={{ scale: 1, opacity: 1 }}
-                      className="bg-black/10 border border-glass-border rounded-[2rem] px-10 py-6 flex items-center gap-4 shadow-xl max-w-full"
+                      className="bg-black/10 border border-glass-border rounded-[2rem] px-6 sm:px-10 py-6 flex items-center gap-4 shadow-xl max-w-full"
                     >
                       <Volume2 className="text-primary shrink-0" size={32} />
                       <span className="text-2xl sm:text-4xl font-black text-[var(--text)] italic tracking-tighter truncate">"{lastAiGuess}"</span>
@@ -402,15 +408,15 @@ const App = () => {
             {/* Action Grid */}
             <div className="action-grid">
               <button onClick={() => nextWord('correct')} className="action-btn success">
-                <CheckCircle2 size={32} />
+                <CheckCircle2 size={24} sm:size={32} />
                 Correct
               </button>
               <button onClick={() => nextWord('wrong')} className="action-btn danger">
-                <X size={32} />
+                <X size={24} sm:size={32} />
                 Wrong
               </button>
               <button onClick={() => nextWord('skipped')} className="action-btn warning">
-                <SkipForward size={32} />
+                <SkipForward size={24} sm:size={32} />
                 Skip
               </button>
             </div>
@@ -421,46 +427,49 @@ const App = () => {
         {gameState === 'results' && (
           <motion.div
             key="results"
-            className="card-main min-w-[500px]"
+            className="card-main w-full max-w-[550px] flex flex-col items-center"
             initial={{ opacity: 0, scale: 0.9 }}
             animate={{ opacity: 1, scale: 1 }}
           >
-            <div className="w-24 h-24 bg-accent/10 rounded-full flex items-center justify-center mx-auto mb-8 border-2 border-accent/20">
-              <Trophy size={48} className="text-accent" />
+            <div className="w-20 h-20 bg-accent/10 rounded-full flex items-center justify-center mx-auto mb-6 border-2 border-accent/20 shrink-0">
+              <Trophy size={40} className="text-accent" />
             </div>
 
-            <h2 className="text-5xl font-black text-[var(--text)] mb-2">GAME OVER</h2>
-            <p className="text-text-muted uppercase font-black tracking-widest text-xs mb-10">Mission Summary</p>
+            <h2 className="text-4xl sm:text-5xl font-black text-[var(--text)] mb-2 text-center">GAME OVER</h2>
+            <p className="text-text-muted uppercase font-black tracking-widest text-[10px] sm:text-xs mb-8 text-center bg-black/20 px-4 py-1.5 rounded-full border border-glass-border">Mission Summary</p>
 
-            <div className="grid grid-cols-3 gap-4 mb-10">
-              <div className="bg-surface-secondary p-6 rounded-2xl border border-glass-border">
-                <span className="text-3xl font-black text-success">{score.correct}</span>
-                <p className="text-[10px] text-text-muted font-black uppercase mt-2">Correct</p>
+            <div className="grid grid-cols-3 gap-3 sm:gap-4 mb-8 w-full">
+              <div className="bg-[var(--surface-secondary)] p-4 sm:p-6 rounded-2xl border border-glass-border flex flex-col items-center justify-center shadow-lg">
+                <span className="text-2xl sm:text-3xl font-black text-success leading-none">{score.correct}</span>
+                <p className="text-[9px] sm:text-[10px] text-text-muted font-black uppercase mt-2 text-center">Correct</p>
               </div>
-              <div className="bg-surface-secondary p-6 rounded-2xl border border-glass-border">
-                <span className="text-3xl font-black text-danger">{score.wrong}</span>
-                <p className="text-[10px] text-text-muted font-black uppercase mt-2">Wrong</p>
+              <div className="bg-[var(--surface-secondary)] p-4 sm:p-6 rounded-2xl border border-glass-border flex flex-col items-center justify-center shadow-lg">
+                <span className="text-2xl sm:text-3xl font-black text-danger leading-none">{score.wrong}</span>
+                <p className="text-[9px] sm:text-[10px] text-text-muted font-black uppercase mt-2 text-center">Wrong</p>
               </div>
-              <div className="bg-surface-secondary p-6 rounded-2xl border border-glass-border">
-                <span className="text-3xl font-black text-accent">{score.skipped}</span>
-                <p className="text-[10px] text-text-muted font-black uppercase mt-2">Skipped</p>
+              <div className="bg-[var(--surface-secondary)] p-4 sm:p-6 rounded-2xl border border-glass-border flex flex-col items-center justify-center shadow-lg">
+                <span className="text-2xl sm:text-3xl font-black text-accent leading-none">{score.skipped}</span>
+                <p className="text-[9px] sm:text-[10px] text-text-muted font-black uppercase mt-2 text-center">Skipped</p>
               </div>
             </div>
 
-            <div className="bg-[var(--surface-secondary)] p-6 rounded-2xl mb-8 flex justify-between items-center border border-glass-border">
-              <span className="text-text-muted font-bold text-sm">TOTAL POINTS</span>
-              <span className="text-3xl font-black text-[var(--text)]">{(score.correct * 100).toLocaleString()}</span>
+            <div className="bg-[var(--surface-secondary)] px-6 py-5 rounded-2xl mb-8 flex justify-between items-center border border-glass-border w-full shadow-lg">
+              <span className="text-text-muted font-black text-xs sm:text-sm tracking-widest">TOTAL POINTS</span>
+              <span className="text-2xl sm:text-4xl font-black text-[var(--text)] leading-none text-transparent bg-clip-text bg-gradient-to-r from-accent to-secondary">
+                {(score.correct * 100).toLocaleString()}
+              </span>
             </div>
 
-            <div className="flex gap-4">
+            <div className="flex gap-4 w-full">
               <button
                 onClick={() => {
                   setGameState('onboarding');
                   setTimeLeft(90);
                   setScore({ correct: 0, wrong: 0, skipped: 0 });
                   setIsVoiceConnected(false);
+                  setIsAuthenticated(false);
                 }}
-                className="flex-1 p-4 rounded-xl bg-surface-secondary text-[var(--text)] font-bold hover:opacity-80 transition-all border border-glass-border"
+                className="flex-[1] py-4 px-2 rounded-xl bg-[var(--surface-secondary)] text-[var(--text)] font-bold hover:opacity-80 transition-all border border-glass-border shadow-md"
               >
                 Home
               </button>
@@ -472,7 +481,7 @@ const App = () => {
                   setIsVoiceConnected(false);
                   setCurrentWordIndex(Math.floor(Math.random() * CHARADES_WORDS.length));
                 }}
-                className="flex-[2] btn-primary"
+                className="flex-[2] btn-primary shadow-lg"
               >
                 Play Again
               </button>
@@ -552,7 +561,7 @@ const App = () => {
               </div>
 
               {/* Start Game Button Moved here */}
-              {gameState === 'onboarding' && (
+              {gameState === 'onboarding' && isAuthenticated && (
                 <button
                   onClick={startGame}
                   className="btn-primary w-full shadow-xl"
