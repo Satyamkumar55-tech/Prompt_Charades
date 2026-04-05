@@ -79,24 +79,25 @@ const App = () => {
     speak(`ready to play give me your first hint`);
   };
 
-  const nextWord = (type) => {
-    setScore(prev => ({ ...prev, [type]: prev[type] + 1 }));
+  const nextWord = useCallback((type) => {
+    if (type) setScore(prev => ({ ...prev, [type]: prev[type] + 1 }));
     setTranscript('');
     setLastAiGuess('');
     
-    let nextIndex;
+    // Prevent clearing usedWords on "Play Again" by checking length against pool
     let newUsedWords = [...usedWords, currentWordIndex];
     if (newUsedWords.length >= CHARADES_WORDS.length) {
-      newUsedWords = []; // Reset if we run out of words
+      newUsedWords = []; // Full reset only when all words are exhausted
     }
     
+    let nextIndex;
     do {
       nextIndex = Math.floor(Math.random() * CHARADES_WORDS.length);
-    } while (newUsedWords.includes(nextIndex));
+    } while (newUsedWords.includes(nextIndex) && newUsedWords.length < CHARADES_WORDS.length);
     
     setUsedWords(newUsedWords);
     setCurrentWordIndex(nextIndex);
-  };
+  }, [usedWords, currentWordIndex]);
 
   const processHint = (text, isFinal) => {
     // Prevent the mic from capturing the AI's own intro speech
@@ -191,9 +192,19 @@ const App = () => {
   const startGame = () => {
     setShowHowToPlay(false);
     setGameState('playing');
-    const startIndex = Math.floor(Math.random() * CHARADES_WORDS.length);
+    
+    // Pick a starting word that hasn't been used yet in the session if possible
+    let startIndex;
+    if (usedWords.length >= CHARADES_WORDS.length) {
+      startIndex = Math.floor(Math.random() * CHARADES_WORDS.length);
+      setUsedWords([startIndex]);
+    } else {
+      do {
+        startIndex = Math.floor(Math.random() * CHARADES_WORDS.length);
+      } while (usedWords.includes(startIndex));
+      setUsedWords(prev => [...prev, startIndex]);
+    }
     setCurrentWordIndex(startIndex);
-    setUsedWords([startIndex]);
   };
 
 
@@ -204,18 +215,18 @@ const App = () => {
       <div className="app-bg" />
 
       {/* Top Left Control - Help */}
-      <div className="absolute top-6 left-6 z-50">
+      <div className="absolute top-8 left-8 z-50">
         <button
           onClick={() => setShowHowToPlay(true)}
-          className="p-3 bg-gradient-to-br from-primary/20 to-secondary/20 hover:from-primary/40 hover:to-secondary/40 rounded-full text-primary hover:text-white transition-all transform hover:scale-110 border border-primary/30 flex items-center justify-center shadow-lg hover:shadow-primary/50"
+          className="p-3 bg-white/10 hover:bg-white/20 rounded-2xl text-white transition-all border border-white/10 flex items-center justify-center shadow-2xl backdrop-blur-md"
           aria-label="How to Play"
         >
-          <HelpCircle size={24} />
+          <HelpCircle size={22} />
         </button>
       </div>
 
       {/* Top Right Control - Theme */}
-      <div className="absolute top-6 right-6 z-50">
+      <div className="absolute top-8 right-8 z-50">
         <ThemeToggle theme={theme} toggleTheme={toggleTheme} />
       </div>
 
@@ -230,37 +241,33 @@ const App = () => {
             exit={{ opacity: 0, scale: 1.1 }}
             className="card-main flex flex-col items-center w-full max-w-[90%] sm:max-w-[500px] md:max-w-[600px] lg:max-w-[700px]"
           >
-            <div className="w-20 h-20 bg-[var(--surface-secondary)] rounded-[1.5rem] flex items-center justify-center mb-6 border border-glass-border">
-              <Gamepad2 className="text-secondary" size={40} />
-            </div>
+            <h1 className="title-onboarding">Prompt Charades</h1>
+            <p className="tagline-onboarding">Charades Meets AI: Guess Smarter, Play Faster!</p>
 
-            <h1 className="text-4xl sm:text-5xl mb-2 font-black tracking-tighter text-[var(--text)] text-center">Prompt Charades</h1>
-            <p className="text-text-muted mb-8 text-sm sm:text-base font-medium opacity-80 text-center">Charades Meets AI: Guess Smarter, Play Faster!</p>
-
-            {/* Auth Tabs */}
-            <div className="flex gap-2 w-full mb-8 bg-black/20 p-1.5 rounded-xl border border-glass-border">
-               <button 
-                 className={`flex-1 py-3 rounded-lg font-bold text-xs sm:text-sm transition-all ${authMode === 'sign_in' ? 'bg-gradient-to-r from-primary to-secondary shadow-lg text-white scale-[1.02]' : 'text-text-muted hover:text-[var(--text)] hover:bg-white/5'}`}
+            {/* Auth Toggle Links */}
+            <div className="auth-toggle">
+               <span 
+                 className={`auth-toggle-link ${authMode === 'sign_in' ? 'active' : ''}`}
                  onClick={() => { setAuthMode('sign_in'); setAuthError(''); }}
                >
                  SIGN IN
-               </button>
-               <button 
-                 className={`flex-1 py-3 rounded-lg font-bold text-xs sm:text-sm transition-all ${authMode === 'sign_up' ? 'bg-gradient-to-r from-secondary to-accent shadow-lg text-white scale-[1.02]' : 'text-text-muted hover:text-[var(--text)] hover:bg-white/5'}`}
+               </span>
+               <span 
+                 className={`auth-toggle-link ${authMode === 'sign_up' ? 'active' : ''}`}
                  onClick={() => { setAuthMode('sign_up'); setAuthError(''); }}
                >
                  SIGN UP
-               </button>
+               </span>
             </div>
 
-            <div className="w-full space-y-6 mb-6">
+            <div className="w-full space-y-5 mb-8">
               {authMode === 'sign_up' && (
                 <div className="text-left w-full">
-                  <label className="block text-xs font-bold mb-2 text-[var(--text)]">Your Name</label>
+                  <label className="input-label">Your Name</label>
                   <div className="input-container w-full">
                     <input
                       type="text"
-                      placeholder="Enter your name"
+                      placeholder="e.g. John Doe"
                       className="input-field w-full"
                       value={userName}
                       onChange={(e) => setUserName(e.target.value)}
@@ -270,11 +277,11 @@ const App = () => {
               )}
 
               <div className="text-left w-full">
-                <label className="block text-xs font-bold mb-2 text-[var(--text)]">Email Address</label>
+                <label className="input-label">Email Address</label>
                 <div className="input-container w-full">
                   <input
                     type="email"
-                    placeholder="Enter your email"
+                    placeholder="name@example.com"
                     className="input-field w-full"
                     value={userEmail}
                     onChange={(e) => setUserEmail(e.target.value)}
@@ -300,9 +307,9 @@ const App = () => {
 
             <button
               onClick={handleAuth}
-              className="btn-primary w-full shadow-lg h-14"
+              className="btn-primary shadow-2xl h-16"
             >
-              <Sparkles size={20} />
+              <Sparkles size={24} className="animate-pulse" />
               {authMode === 'sign_in' ? 'Sign In' : 'Create Account'}
             </button>
           </motion.div>
@@ -319,13 +326,13 @@ const App = () => {
             {/* Header / Timer HUD */}
             <div className="hud-timer shadow-2xl">
               <div className="flex justify-between items-center mb-1">
-                <div className="flex items-center gap-2 text-[var(--text)] font-bold">
+                <div className="flex items-center gap-2 text-[var(--text-primary)] font-bold">
                   <Clock size={20} className="text-secondary" />
                   <span className="text-lg">
                     {isVoiceConnected ? "Time Left" : "Connect Voice to Start"}
                   </span>
                 </div>
-                <div className="text-3xl font-black font-mono text-[var(--text)]">
+                <div className="text-3xl font-black font-mono text-[var(--text-primary)]">
                   {Math.floor(timeLeft / 60)}:{(timeLeft % 60).toString().padStart(2, '0')}
                 </div>
               </div>
@@ -338,7 +345,7 @@ const App = () => {
                 />
               </div>
 
-              <p className="text-[10px] text-text-muted font-bold uppercase tracking-wider text-center">
+              <p className="text-[10px] text-[var(--text-muted)] font-bold uppercase tracking-wider text-center">
                 Timer starts when you connect the voice agent
               </p>
             </div>
@@ -352,11 +359,12 @@ const App = () => {
                 initial={{ opacity: 0, scale: 0.8 }}
                 animate={{ opacity: 1, scale: 1 }}
                 className="word-display text-4xl sm:text-6xl"
+                style={{ color: 'var(--text-primary)' }}
               >
                 {currentWord}
               </motion.h2>
 
-              <p className="text-xs font-bold text-text-muted mt-4">Word {score.correct + score.wrong + score.skipped + 1} of 108</p>
+              <p className="text-xs font-bold text-[var(--text-muted)] mt-4">Word {usedWords.length} of {CHARADES_WORDS.length}</p>
 
               {/* Voice Status Overlay */}
               <div className="mt-8 h-10 flex items-center justify-center">
@@ -372,7 +380,7 @@ const App = () => {
                     ))}
                   </div>
                 ) : (
-                  transcript && <p className="text-text-muted italic text-sm text-center">AI heard: "{transcript}"</p>
+                  transcript && <p className="text-[var(--text-muted)] italic text-sm text-center">AI heard: "{transcript}"</p>
                 )}
               </div>
             </div>
@@ -406,13 +414,13 @@ const App = () => {
 
             {/* Score HUD */}
             <div className="flex gap-10 items-center justify-center mb-[-1rem]">
-              <div className="flex items-center gap-2 text-text-muted font-black text-sm">
+              <div className="flex items-center gap-2 text-[var(--text-muted)] font-black text-sm">
                 <Trophy size={20} className="text-secondary" /> {score.correct}
               </div>
-              <div className="flex items-center gap-2 text-text-muted font-black text-sm">
+              <div className="flex items-center gap-2 text-[var(--text-muted)] font-black text-sm">
                 <X size={20} className="text-danger" /> {score.wrong}
               </div>
-              <div className="flex items-center gap-2 text-text-muted font-black text-sm">
+              <div className="flex items-center gap-2 text-[var(--text-muted)] font-black text-sm">
                 <SkipForward size={20} className="text-yellow-500" /> {score.skipped}
               </div>
             </div>
@@ -439,41 +447,37 @@ const App = () => {
         {gameState === 'results' && (
           <motion.div
             key="results"
-            className="card-main w-full max-w-[90%] sm:max-w-[550px] md:max-w-[700px] flex flex-col items-center"
+            className="card-main w-full max-w-[90%] sm:max-w-[600px] md:max-w-[750px] flex flex-col items-center"
             initial={{ opacity: 0, scale: 0.9 }}
             animate={{ opacity: 1, scale: 1 }}
           >
-            <div className="w-20 h-20 bg-accent/10 rounded-full flex items-center justify-center mx-auto mb-6 border-2 border-accent/20 shrink-0">
+            <div className="w-20 h-20 bg-accent/20 rounded-2xl flex items-center justify-center mx-auto mb-6 border border-glass-border shadow-accent/20 shadow-xl shrink-0">
               <Trophy size={40} className="text-accent" />
             </div>
 
-            <h2 className="text-4xl sm:text-5xl font-black text-[var(--text)] mb-2 text-center">GAME OVER</h2>
-            <p className="text-text-muted uppercase font-black tracking-widest text-[10px] sm:text-xs mb-8 text-center bg-black/20 px-4 py-1.5 rounded-full border border-glass-border">Mission Summary</p>
+            <h2 className="title-onboarding" style={{ fontSize: '3.5rem' }}>Game Over</h2>
+            <p className="tagline-onboarding" style={{ marginBottom: '2.5rem' }}>Mission Summary: Well played, {userName || 'Agent'}!</p>
 
-            <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 sm:gap-6 mb-8 w-full">
-              <div className="bg-[var(--surface-secondary)] p-6 rounded-2xl border border-glass-border flex flex-col items-center justify-center shadow-lg w-full">
-                <span className="text-3xl sm:text-4xl font-black text-success leading-none">{score.correct}</span>
-                <p className="text-xs sm:text-sm text-text-muted font-black uppercase mt-2 text-center">Correct</p>
+            <div className="grid grid-cols-1 sm:grid-cols-3 gap-6 mb-8 w-full">
+              <div className="bg-[var(--surface-secondary)] p-6 rounded-2xl border border-glass-border flex flex-col items-center justify-center shadow-lg transition-transform hover:scale-[1.05]">
+                <span className="text-4xl font-black text-success leading-none">{score.correct}</span>
+                <p className="text-[10px] text-[var(--text-muted)] font-black uppercase tracking-widest mt-2">Correct</p>
               </div>
-              <div className="bg-[var(--surface-secondary)] p-6 rounded-2xl border border-glass-border flex flex-col items-center justify-center shadow-lg w-full">
-                <span className="text-3xl sm:text-4xl font-black text-danger leading-none">{score.wrong}</span>
-                <p className="text-xs sm:text-sm text-text-muted font-black uppercase mt-2 text-center">Wrong</p>
+              <div className="bg-[var(--surface-secondary)] p-6 rounded-2xl border border-glass-border flex flex-col items-center justify-center shadow-lg transition-transform hover:scale-[1.05]">
+                <span className="text-4xl font-black text-danger leading-none">{score.wrong}</span>
+                <p className="text-[10px] text-[var(--text-muted)] font-black uppercase tracking-widest mt-2">Wrong</p>
               </div>
-              <div className="bg-[var(--surface-secondary)] p-6 rounded-2xl border border-glass-border flex flex-col items-center justify-center shadow-lg w-full">
-                <span className="text-3xl sm:text-4xl font-black text-accent leading-none">{score.skipped}</span>
-                <p className="text-xs sm:text-sm text-text-muted font-black uppercase mt-2 text-center">Skipped</p>
+              <div className="bg-[var(--surface-secondary)] p-6 rounded-2xl border border-glass-border flex flex-col items-center justify-center shadow-lg transition-transform hover:scale-[1.05]">
+                <span className="text-4xl font-black text-accent leading-none">{score.skipped}</span>
+                <p className="text-[10px] text-[var(--text-muted)] font-black uppercase tracking-widest mt-2">Skipped</p>
               </div>
             </div>
 
-            <div className="flex flex-col gap-4 mb-8 w-full">
-              <div className="bg-[var(--surface-secondary)] py-3 px-6 rounded-2xl flex items-center justify-center border border-glass-border shadow-sm">
-                 <span className="text-text-muted font-black text-xs sm:text-sm tracking-widest">TOTAL POINTS</span>
-              </div>
-              <div className="bg-black/20 py-6 px-6 rounded-2xl flex items-center justify-center border border-glass-border shadow-inner w-full">
-                 <span className="text-5xl sm:text-6xl md:text-7xl font-black text-[var(--text)] leading-none text-transparent bg-clip-text bg-gradient-to-r from-accent via-secondary to-primary drop-shadow-lg text-center break-words w-full">
-                   {((score.correct * 100) - (score.wrong * 50)).toLocaleString()}
-                 </span>
-              </div>
+            <div className="bg-black/10 py-8 px-6 rounded-3xl flex flex-col items-center justify-center border border-glass-border shadow-inner w-full mb-10">
+               <span className="text-[10px] text-[var(--text-muted)] font-black tracking-[0.3em] uppercase mb-2">Total Points</span>
+               <span className="text-6xl sm:text-7xl font-black text-transparent bg-clip-text bg-gradient-to-r from-accent via-secondary to-primary drop-shadow-lg">
+                 {((score.correct * 100) - (score.wrong * 50)).toLocaleString()}
+               </span>
             </div>
 
             <div className="flex flex-col sm:flex-row gap-4 w-full">
@@ -485,9 +489,9 @@ const App = () => {
                   setIsVoiceConnected(false);
                   setIsAuthenticated(false);
                 }}
-                className="w-full sm:flex-[1] flex items-center justify-center gap-2 py-4 px-2 rounded-xl bg-gradient-to-br from-[var(--surface-secondary)] to-black/40 text-[var(--text)] font-bold hover:from-white/10 hover:to-white/5 transition-all border border-glass-border shadow-md transform hover:scale-[1.02]"
+                className="w-full sm:flex-[1] flex items-center justify-center gap-3 py-4 px-2 rounded-2xl bg-white/5 text-[var(--text-primary)] font-bold hover:bg-white/10 transition-all border border-glass-border shadow-md"
               >
-                <Home size={20} className="text-text-muted" />
+                <Home size={22} className="text-[var(--text-muted)]" />
                 Home
               </button>
               <button
@@ -496,12 +500,11 @@ const App = () => {
                   setTimeLeft(90);
                   setScore({ correct: 0, wrong: 0, skipped: 0 });
                   setIsVoiceConnected(false);
-                  const startIndex = Math.floor(Math.random() * CHARADES_WORDS.length);
-                  setCurrentWordIndex(startIndex);
-                  setUsedWords([startIndex]);
+                  startGame();
                 }}
-                className="w-full sm:flex-[2] btn-primary shadow-lg"
+                className="w-full sm:flex-[2] btn-primary shadow-xl h-16"
               >
+                <RotateCcw size={22} />
                 Play Again
               </button>
             </div>
@@ -536,48 +539,58 @@ const App = () => {
                   <Trophy size={28} />
                 </div>
                 <div>
-                  <h3 className="text-2xl font-black text-[var(--text)]">How to Play</h3>
-                  <p className="text-xs font-bold text-text-muted">Master the rules, win the game!</p>
+                  <h3 className="text-2xl font-black text-[var(--text-primary)]">How to Play</h3>
+                  <p className="text-xs font-bold text-[var(--text-muted)]">Master the rules, win the game!</p>
                 </div>
               </div>
 
-              <div className="space-y-4 mb-8">
-                <div className="how-to-step">
-                  <div className="step-icon bg-primary/20 text-primary"><Mic size={24} /></div>
-                  <div>
-                    <h4 className="text-[var(--text)] font-bold mb-1">Connect Voice Agent</h4>
-                    <p className="text-xs text-text-muted leading-relaxed">First, connect the AI voice agent. The 90-second timer starts when you connect!</p>
-                  </div>
-                </div>
-                <div className="how-to-step">
-                  <div className="step-icon bg-secondary/20 text-secondary"><Clock size={24} /></div>
-                  <div>
-                    <h4 className="text-[var(--text)] font-bold mb-1">90 Seconds</h4>
-                    <p className="text-xs text-text-muted leading-relaxed">Once connected, you have 90 seconds to get through as many words as possible.</p>
-                  </div>
-                </div>
-                <div className="how-to-step">
-                  <div className="step-icon bg-accent/20 text-accent"><Play size={24} /></div>
-                  <div>
-                    <h4 className="text-[var(--text)] font-bold mb-1">Give Hints</h4>
-                    <p className="text-xs text-text-muted leading-relaxed">Describe the word to the AI without saying it. The AI will try to guess!</p>
-                  </div>
-                </div>
-                <div className="how-to-step">
-                  <div className="step-icon bg-success/20 text-success"><CheckCircle2 size={24} /></div>
-                  <div>
-                    <h4 className="text-[var(--text)] font-bold mb-1">Correct (+100 pts)</h4>
-                    <p className="text-xs text-text-muted leading-relaxed">Tap Correct when the AI guesses right. Each correct answer = 100 points!</p>
-                  </div>
-                </div>
-                <div className="how-to-step">
-                  <div className="step-icon bg-danger/20 text-danger"><X size={24} /></div>
-                  <div>
-                    <h4 className="text-[var(--text)] font-bold mb-1">Wrong (-50 pts)</h4>
-                    <p className="text-xs text-text-muted leading-relaxed">If you accidentally say the word or the AI gives up, tap Wrong. Watch out, you lose 50 points!</p>
-                  </div>
+              <div className="how-to-step">
+                <div className="step-icon bg-primary/20 text-primary"><Mic size={24} /></div>
+                <div>
+                  <h4 className="text-[var(--text-primary)] font-bold mb-1 text-sm">Connect Voice Agent</h4>
+                  <p className="text-xs text-[var(--text-muted)] leading-relaxed">First, connect the AI voice agent. The 90-second timer starts when you connect!</p>
                 </div>
               </div>
+              <div className="how-to-step">
+                <div className="step-icon bg-secondary/20 text-secondary"><Clock size={24} /></div>
+                <div>
+                  <h4 className="text-[var(--text-primary)] font-bold mb-1 text-sm">90 Seconds</h4>
+                  <p className="text-xs text-[var(--text-muted)] leading-relaxed">Once connected, you have 90 seconds to get through as many words as possible.</p>
+                </div>
+              </div>
+              <div className="how-to-step">
+                <div className="step-icon bg-accent/20 text-accent"><Play size={24} /></div>
+                <div>
+                  <h4 className="text-[var(--text-primary)] font-bold mb-1 text-sm">Give Hints</h4>
+                  <p className="text-xs text-[var(--text-muted)] leading-relaxed">Describe the word to the AI without saying it. The AI will try to guess!</p>
+                </div>
+              </div>
+              <div className="how-to-step">
+                <div className="step-icon bg-success/20 text-success"><CheckCircle2 size={24} /></div>
+                <div>
+                  <h4 className="text-[var(--text-primary)] font-bold mb-1 text-sm">Correct (+100 pts)</h4>
+                  <p className="text-xs text-[var(--text-muted)] leading-relaxed">Tap Correct when the AI guesses right. Each correct answer = 100 points!</p>
+                </div>
+              </div>
+              <div className="how-to-step">
+                <div className="step-icon bg-danger/20 text-danger"><X size={24} /></div>
+                <div>
+                  <h4 className="text-[var(--text-primary)] font-bold mb-1 text-sm">Wrong (-50 pts)</h4>
+                  <p className="text-xs text-[var(--text-muted)] leading-relaxed">If you accidentally say the word or the AI gives up, tap Wrong. Watch out, you lose 50 points!</p>
+                </div>
+              </div>
+
+              <div className="pro-tip">
+                <div className="flex items-center gap-2 mb-2">
+                  <Zap size={18} className="text-accent" />
+                  <span className="font-black text-xs text-accent uppercase tracking-wider">Pro Tip</span>
+                </div>
+                <p className="text-xs text-[var(--text-secondary)] leading-relaxed font-medium">
+                  Skip the word if it's too difficult! Stick to <span className="text-white font-bold">simple keywords</span> instead of sentences so the AI can guess faster.
+                </p>
+              </div>
+
+              <div className="h-10" />
 
               {/* Start Game Button Moved here */}
               {gameState === 'onboarding' && isAuthenticated && (
