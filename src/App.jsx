@@ -50,6 +50,8 @@ const App = () => {
   const [isThinking, setIsThinking] = useState(false);
   const [showHowToPlay, setShowHowToPlay] = useState(false);
   const [isVoiceConnected, setIsVoiceConnected] = useState(false);
+  const [aiHasGuessed, setAiHasGuessed] = useState(false); // true only when AI makes a real word guess
+  const thinkingTimeoutRef = useRef(null);
 
   // Hooks
   const { speak, isSpeaking, cancelSpeech } = useTextToSpeech();
@@ -86,6 +88,10 @@ const App = () => {
     if (type) setScore(prev => ({ ...prev, [type]: prev[type] + 1 }));
     setTranscript('');
     setLastAiGuess('');
+    setAiHasGuessed(false);
+    setIsThinking(false);
+    cancelSpeech();
+    if (thinkingTimeoutRef.current) clearTimeout(thinkingTimeoutRef.current);
     
     let newUsedWords = [...usedWords, currentWordIndex];
     if (newUsedWords.length >= activeWordPool.length) {
@@ -99,25 +105,30 @@ const App = () => {
     
     setUsedWords(newUsedWords);
     setCurrentWordIndex(nextIndex);
-  }, [usedWords, currentWordIndex, activeWordPool]);
+  }, [usedWords, currentWordIndex, activeWordPool, cancelSpeech]);
 
   const processHint = (text, isFinal) => {
     if (text.toLowerCase().includes("ready to play")) return;
+    if (text.toLowerCase().includes("give me")) return;
 
     const currentWordData = activeWordPool[currentWordIndex];
     if (!currentWordData) return;
 
+    // Don't process if already thinking
+    if (isThinking) return;
+
     const userText = text.toLowerCase();
 
     if (userText.includes(currentWordData.word.toLowerCase())) {
-       if (!isThinking && !isSpeaking) {
+       if (!isSpeaking) {
+          cancelSpeech();
           setIsThinking(true);
-          setTimeout(() => {
+          thinkingTimeoutRef.current = setTimeout(() => {
              const guess = `You just said ${currentWordData.word}!`;
              setLastAiGuess(guess);
              speak(`Hey, you aren't allowed to say ${currentWordData.word}! That's the word!`);
              setIsThinking(false);
-          }, 600);
+          }, 500);
        }
        return;
     }
@@ -127,22 +138,27 @@ const App = () => {
       return regex.test(userText);
     });
 
-    if (match && !isThinking && !isSpeaking) {
+    if (match) {
+      // Cancel any ongoing speech so the AI responds faster
+      cancelSpeech();
       setIsThinking(true);
-      setTimeout(() => {
+      thinkingTimeoutRef.current = setTimeout(() => {
         const guess = `${currentWordData.word}?`;
         setLastAiGuess(guess);
+        setAiHasGuessed(true); // AI made a real guess — enable Correct button
         speak(`Is it ${currentWordData.word}?`);
         setIsThinking(false);
-      }, 600);
-    } else if (!match && !isThinking && !isSpeaking && isFinal) {
+      }, 500);
+    } else if (!match && isFinal && !isSpeaking) {
+      // Only fire fallback occasionally, and with a longer delay to avoid blocking
       setIsThinking(true);
-      setTimeout(() => {
-        const fallbackTalk = "Didn't get that.";
+      thinkingTimeoutRef.current = setTimeout(() => {
+        const fallbacks = ["Hmm, tell me more.", "Give me another hint!", "I need more clues.", "Keep going!"];
+        const fallbackTalk = fallbacks[Math.floor(Math.random() * fallbacks.length)];
         setLastAiGuess(fallbackTalk);
         speak(fallbackTalk);
         setIsThinking(false);
-      }, 600);
+      }, 800);
     }
   };
 
@@ -415,24 +431,43 @@ const App = () => {
             )}
 
             {/* Header / Timer HUD */}
-            <div className="hud-timer shadow-2xl">
+            <div className={`hud-timer shadow-2xl ${timeLeft <= 10 && isVoiceConnected ? 'timer-critical' : ''}`}>
               <div className="flex justify-between items-center mb-1">
                 <div className="flex items-center gap-2 text-[var(--text-primary)] font-bold">
-                  <Clock size={20} className="text-secondary" />
+                  <Clock size={20} style={{ color: timeLeft <= 10 && isVoiceConnected ? '#ef4444' : 'var(--secondary)' }} />
                   <span className="text-lg">
                     {isVoiceConnected ? "Time Left" : "Connect Voice to Start"}
                   </span>
                 </div>
-                <div className="text-3xl font-black font-mono text-[var(--text-primary)]">
+                <motion.div
+                  className="font-black font-mono"
+                  style={{
+                    fontSize: '1.875rem',
+                    color: timeLeft <= 10 && isVoiceConnected ? '#ef4444' : 'var(--text-primary)',
+                  }}
+                  animate={
+                    timeLeft <= 10 && isVoiceConnected
+                      ? { scale: [1, 1.25, 1], opacity: [1, 0.7, 1] }
+                      : { scale: 1, opacity: 1 }
+                  }
+                  transition={
+                    timeLeft <= 10 && isVoiceConnected
+                      ? { repeat: Infinity, duration: 0.8, ease: 'easeInOut' }
+                      : {}
+                  }
+                >
                   {Math.floor(timeLeft / 60)}:{(timeLeft % 60).toString().padStart(2, '0')}
-                </div>
+                </motion.div>
               </div>
 
               <div className="progress-bar-container">
                 <motion.div
                   className="progress-bar-fill"
                   initial={{ width: "100%" }}
-                  animate={{ width: `${(timeLeft / 90) * 100}%` }}
+                  animate={{
+                    width: `${(timeLeft / 90) * 100}%`,
+                    backgroundColor: timeLeft <= 10 && isVoiceConnected ? '#ef4444' : undefined,
+                  }}
                 />
               </div>
 
@@ -518,16 +553,21 @@ const App = () => {
 
             {/* Action Grid */}
             <div className="action-grid">
-              <button onClick={() => nextWord('correct')} className="action-btn success">
-                <CheckCircle2 size={24} sm:size={32} />
+              <button
+                onClick={() => nextWord('correct')}
+                className={`action-btn success ${!aiHasGuessed ? 'disabled' : ''}`}
+                disabled={!aiHasGuessed}
+                title={!aiHasGuessed ? 'Wait for the AI to guess first!' : ''}
+              >
+                <CheckCircle2 size={24} />
                 Correct
               </button>
               <button onClick={() => nextWord('wrong')} className="action-btn danger">
-                <X size={24} sm:size={32} />
+                <X size={24} />
                 Wrong
               </button>
               <button onClick={() => nextWord('skipped')} className="action-btn warning">
-                <SkipForward size={24} sm:size={32} />
+                <SkipForward size={24} />
                 Skip
               </button>
             </div>
