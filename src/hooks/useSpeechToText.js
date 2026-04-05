@@ -32,11 +32,16 @@ const useSpeechToText = (onTranscript) => {
       setIsListening(false);
       // Auto-restart if it should be listening
       if (shouldBeListening.current) {
-        try {
-          recognition.start();
-        } catch (err) {
-          console.error('Failed to auto-restart recognition:', err);
-        }
+        const restart = () => {
+          if (!shouldBeListening.current) return;
+          try {
+            recognition.start();
+          } catch (err) {
+            console.error('Failed to auto-restart recognition:', err);
+            setTimeout(restart, 1000);
+          }
+        };
+        setTimeout(restart, 100);
       }
     };
 
