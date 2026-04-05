@@ -4,11 +4,11 @@ import {
   Gamepad2, Mic, MicOff, Trophy, X, SkipForward, Play,
   RotateCcw, Volume2, Settings, Info, CheckCircle2,
   Sparkles, Zap, BrainCircuit, Heart, User, Mail,
-  Clock, Award, Brain, HelpCircle, Home
+  Clock, Award, Brain, HelpCircle, Home, ChevronRight, Star
 } from 'lucide-react';
 import useSpeechToText from './hooks/useSpeechToText';
 import useTextToSpeech from './hooks/useTextToSpeech';
-import { CHARADES_WORDS } from './data/words';
+import { CATEGORIES, CHARADES_WORDS } from './data/words';
 import ThemeToggle from './components/ThemeToggle';
 
 const App = () => {
@@ -28,7 +28,10 @@ const App = () => {
   };
 
   // Game State
-  const [gameState, setGameState] = useState('onboarding'); // onboarding, playing, results
+  // onboarding → category_select → playing → results
+  const [gameState, setGameState] = useState('onboarding');
+  const [selectedCategory, setSelectedCategory] = useState(null); // id of selected category
+  const [activeWordPool, setActiveWordPool] = useState([]);        // words for the selected category
   const [currentWordIndex, setCurrentWordIndex] = useState(0);
   const [usedWords, setUsedWords] = useState([]);
   const [score, setScore] = useState({ correct: 0, wrong: 0, skipped: 0 });
@@ -84,31 +87,28 @@ const App = () => {
     setTranscript('');
     setLastAiGuess('');
     
-    // Prevent clearing usedWords on "Play Again" by checking length against pool
     let newUsedWords = [...usedWords, currentWordIndex];
-    if (newUsedWords.length >= CHARADES_WORDS.length) {
-      newUsedWords = []; // Full reset only when all words are exhausted
+    if (newUsedWords.length >= activeWordPool.length) {
+      newUsedWords = [];
     }
     
     let nextIndex;
     do {
-      nextIndex = Math.floor(Math.random() * CHARADES_WORDS.length);
-    } while (newUsedWords.includes(nextIndex) && newUsedWords.length < CHARADES_WORDS.length);
+      nextIndex = Math.floor(Math.random() * activeWordPool.length);
+    } while (newUsedWords.includes(nextIndex) && newUsedWords.length < activeWordPool.length);
     
     setUsedWords(newUsedWords);
     setCurrentWordIndex(nextIndex);
-  }, [usedWords, currentWordIndex]);
+  }, [usedWords, currentWordIndex, activeWordPool]);
 
   const processHint = (text, isFinal) => {
-    // Prevent the mic from capturing the AI's own intro speech
     if (text.toLowerCase().includes("ready to play")) return;
 
-    const currentWordData = CHARADES_WORDS[currentWordIndex];
+    const currentWordData = activeWordPool[currentWordIndex];
     if (!currentWordData) return;
 
     const userText = text.toLowerCase();
 
-    // Check if the word itself is said (against the rules, but AI should acknowledge)
     if (userText.includes(currentWordData.word.toLowerCase())) {
        if (!isThinking && !isSpeaking) {
           setIsThinking(true);
@@ -122,24 +122,20 @@ const App = () => {
        return;
     }
 
-    // Advanced match: Only match if the keyword appears as a distinct word, 
-    // to prevent 'read' from matching inside 'ready'.
     const match = currentWordData.keywords.find(keyword => {
       const regex = new RegExp(`\\b${keyword.toLowerCase()}\\b`, 'i');
       return regex.test(userText);
     });
 
     if (match && !isThinking && !isSpeaking) {
-      // AI "Thinking" state
       setIsThinking(true);
       setTimeout(() => {
         const guess = `${currentWordData.word}?`;
         setLastAiGuess(guess);
-        speak(`Is it a ${currentWordData.word}?`);
+        speak(`Is it ${currentWordData.word}?`);
         setIsThinking(false);
       }, 600);
     } else if (!match && !isThinking && !isSpeaking && isFinal) {
-      // Fallback response ONLY when user finishes speaking (isFinal)
       setIsThinking(true);
       setTimeout(() => {
         const fallbackTalk = "Didn't get that.";
@@ -177,7 +173,7 @@ const App = () => {
       existingUsers[userEmail] = { name: userName };
       localStorage.setItem('charadesUsers', JSON.stringify(existingUsers));
       setIsAuthenticated(true);
-      setShowHowToPlay(true);
+      setGameState('category_select'); // Go to category selection after sign up
     } else {
       if (!existingUsers[userEmail]) {
          setAuthError("Email not found. Please Sign Up.");
@@ -185,30 +181,38 @@ const App = () => {
       }
       setUserName(existingUsers[userEmail].name);
       setIsAuthenticated(true);
-      setShowHowToPlay(true);
+      setGameState('category_select'); // Go to category selection after sign in
     }
+  };
+
+  const handleCategorySelect = (categoryId) => {
+    const category = CATEGORIES[categoryId];
+    setSelectedCategory(categoryId);
+    setActiveWordPool(category.words);
+    setShowHowToPlay(true); // Show rules after category selection
   };
 
   const startGame = () => {
     setShowHowToPlay(false);
     setGameState('playing');
+    setUsedWords([]);
+    setScore({ correct: 0, wrong: 0, skipped: 0 });
+    setTimeLeft(90);
+    setIsVoiceConnected(false);
+    setTranscript('');
+    setLastAiGuess('');
     
-    // Pick a starting word that hasn't been used yet in the session if possible
-    let startIndex;
-    if (usedWords.length >= CHARADES_WORDS.length) {
-      startIndex = Math.floor(Math.random() * CHARADES_WORDS.length);
-      setUsedWords([startIndex]);
-    } else {
-      do {
-        startIndex = Math.floor(Math.random() * CHARADES_WORDS.length);
-      } while (usedWords.includes(startIndex));
-      setUsedWords(prev => [...prev, startIndex]);
-    }
+    const pool = selectedCategory ? CATEGORIES[selectedCategory].words : CHARADES_WORDS;
+    const wp = pool;
+    setActiveWordPool(wp);
+
+    const startIndex = Math.floor(Math.random() * wp.length);
     setCurrentWordIndex(startIndex);
+    setUsedWords([startIndex]);
   };
 
-
-  const currentWord = CHARADES_WORDS[currentWordIndex]?.word || "Game Over";
+  const currentCategory = selectedCategory ? CATEGORIES[selectedCategory] : null;
+  const currentWord = (activeWordPool[currentWordIndex] || {}).word || "Game Over";
 
   return (
     <div className="w-full h-full flex flex-col items-center justify-center p-6 relative overflow-hidden">
@@ -232,7 +236,7 @@ const App = () => {
 
       <AnimatePresence mode="wait">
 
-        {/* ONBOARDING */}
+        {/* ONBOARDING / LOGIN */}
         {gameState === 'onboarding' && (
           <motion.div
             key="onboarding"
@@ -310,8 +314,84 @@ const App = () => {
               className="btn-primary shadow-2xl h-16"
             >
               <Sparkles size={24} className="animate-pulse" />
-              {authMode === 'sign_in' ? 'Sign In' : 'Create Account'}
+              {authMode === 'sign_in' ? 'Sign In & Pick Category' : 'Create Account'}
             </button>
+          </motion.div>
+        )}
+
+        {/* CATEGORY SELECTION */}
+        {gameState === 'category_select' && (
+          <motion.div
+            key="category_select"
+            initial={{ opacity: 0, y: 40 }}
+            animate={{ opacity: 1, y: 0 }}
+            exit={{ opacity: 0, y: -40 }}
+            className="flex flex-col items-center w-full max-w-[90%] sm:max-w-[600px] md:max-w-[750px] lg:max-w-[860px]"
+          >
+            {/* Header */}
+            <motion.div
+              initial={{ opacity: 0, y: -20 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ delay: 0.1 }}
+              className="text-center mb-10"
+            >
+              <h2 className="cat-heading">Choose a Category</h2>
+              <p className="cat-subheading">
+                Welcome back, <span className="cat-name-highlight">{userName || 'Player'}</span>! Pick your favourite topic to play.
+              </p>
+            </motion.div>
+
+            {/* Category Cards */}
+            <div className="category-grid">
+              {Object.values(CATEGORIES).map((cat, idx) => (
+                <motion.button
+                  key={cat.id}
+                  id={`category-${cat.id}`}
+                  initial={{ opacity: 0, y: 30 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  transition={{ delay: 0.15 + idx * 0.1 }}
+                  whileHover={{ scale: 1.04, y: -6 }}
+                  whileTap={{ scale: 0.97 }}
+                  onClick={() => handleCategorySelect(cat.id)}
+                  className="category-card"
+                  style={{ '--cat-color': cat.color, '--cat-gradient': cat.gradient }}
+                >
+                  {/* Glow blob */}
+                  <div className="cat-glow" style={{ background: cat.color }} />
+
+                  {/* Emoji */}
+                  <div className="cat-emoji-wrap">
+                    <span className="cat-emoji">{cat.emoji}</span>
+                  </div>
+
+                  {/* Label */}
+                  <h3 className="cat-label">{cat.label}</h3>
+                  <p className="cat-desc">{cat.description}</p>
+
+                  {/* Word count badge */}
+                  <div className="cat-badge">
+                    <Star size={11} />
+                    <span>{cat.words.length} words</span>
+                  </div>
+
+                  {/* Arrow */}
+                  <div className="cat-arrow">
+                    <ChevronRight size={20} />
+                  </div>
+                </motion.button>
+              ))}
+            </div>
+
+            {/* Sign out link */}
+            <motion.button
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              transition={{ delay: 0.5 }}
+              onClick={() => { setIsAuthenticated(false); setGameState('onboarding'); }}
+              className="cat-back-btn"
+            >
+              ← Sign out
+            </motion.button>
           </motion.div>
         )}
 
@@ -323,6 +403,17 @@ const App = () => {
             initial={{ opacity: 0, y: 30 }}
             animate={{ opacity: 1, y: 0 }}
           >
+            {/* Category Badge in playing screen */}
+            {currentCategory && (
+              <div
+                className="playing-cat-badge"
+                style={{ color: currentCategory.color, borderColor: currentCategory.color + '44' }}
+              >
+                <span>{currentCategory.emoji}</span>
+                <span>{currentCategory.label}</span>
+              </div>
+            )}
+
             {/* Header / Timer HUD */}
             <div className="hud-timer shadow-2xl">
               <div className="flex justify-between items-center mb-1">
@@ -364,7 +455,7 @@ const App = () => {
                 {currentWord}
               </motion.h2>
 
-              <p className="text-xs font-bold text-[var(--text-muted)] mt-4">Word {usedWords.length} of {CHARADES_WORDS.length}</p>
+              <p className="text-xs font-bold text-[var(--text-muted)] mt-4">Word {usedWords.length} of {activeWordPool.length}</p>
 
               {/* Voice Status Overlay */}
               <div className="mt-8 h-10 flex items-center justify-center">
@@ -458,6 +549,12 @@ const App = () => {
             <h2 className="title-onboarding" style={{ fontSize: '3.5rem' }}>Game Over</h2>
             <p className="tagline-onboarding" style={{ marginBottom: '2.5rem' }}>Mission Summary: Well played, {userName || 'Agent'}!</p>
 
+            {currentCategory && (
+              <div className="results-cat-badge" style={{ background: currentCategory.color + '22', borderColor: currentCategory.color + '55', color: currentCategory.color }}>
+                {currentCategory.emoji} {currentCategory.label} Category
+              </div>
+            )}
+
             <div className="grid grid-cols-1 sm:grid-cols-3 gap-6 mb-8 w-full">
               <div className="bg-[var(--surface-secondary)] p-6 rounded-2xl border border-glass-border flex flex-col items-center justify-center shadow-lg transition-transform hover:scale-[1.05]">
                 <span className="text-4xl font-black text-success leading-none">{score.correct}</span>
@@ -483,16 +580,15 @@ const App = () => {
             <div className="flex flex-col sm:flex-row gap-4 w-full">
               <button
                 onClick={() => {
-                  setGameState('onboarding');
-                  setTimeLeft(90);
-                  setScore({ correct: 0, wrong: 0, skipped: 0 });
+                  setGameState('category_select');
                   setIsVoiceConnected(false);
-                  setIsAuthenticated(false);
+                  setSelectedCategory(null);
+                  setActiveWordPool([]);
                 }}
-                className="w-full sm:flex-[1] flex items-center justify-center gap-3 py-4 px-2 rounded-2xl bg-white/5 text-[var(--text-primary)] font-bold hover:bg-white/10 transition-all border border-glass-border shadow-md"
+                className="w-full sm:flex-[1] btn-secondary shadow-xl h-16"
               >
-                <Home size={22} className="text-[var(--text-muted)]" />
-                Home
+                <Home size={22} />
+                Change Category
               </button>
               <button
                 onClick={() => {
@@ -521,7 +617,7 @@ const App = () => {
             animate={{ opacity: 1 }}
             exit={{ opacity: 0 }}
             className="modal-overlay"
-            onClick={() => setShowHowToPlay(false)}
+            onClick={() => { if (gameState !== 'category_select' || !selectedCategory) return; setShowHowToPlay(false); }}
           >
             <motion.div
               initial={{ scale: 0.9, y: 50 }}
@@ -544,62 +640,78 @@ const App = () => {
                 </div>
               </div>
 
+              {/* Category info at top of rules */}
+              {selectedCategory && CATEGORIES[selectedCategory] && (
+                <div
+                  className="rules-cat-banner"
+                  style={{
+                    background: CATEGORIES[selectedCategory].gradient,
+                  }}
+                >
+                  <span className="rules-cat-emoji">{CATEGORIES[selectedCategory].emoji}</span>
+                  <div>
+                    <div className="rules-cat-name">{CATEGORIES[selectedCategory].label}</div>
+                    <div className="rules-cat-count">{CATEGORIES[selectedCategory].words.length} words in this category</div>
+                  </div>
+                </div>
+              )}
+
               <div className="how-to-step">
-                <div className="step-icon bg-primary/20 text-primary"><Mic size={24} /></div>
+                <div className="step-icon" style={{ background: 'rgba(236,72,153,0.2)', color: '#ec4899' }}><Mic size={24} /></div>
                 <div>
-                  <h4 className="text-[var(--text-primary)] font-bold mb-1 text-sm">Connect Voice Agent</h4>
-                  <p className="text-xs text-[var(--text-muted)] leading-relaxed">First, connect the AI voice agent. The 90-second timer starts when you connect!</p>
+                  <h4>Connect Voice Agent</h4>
+                  <p>First, connect the AI voice agent. The 90-second timer starts when you connect!</p>
                 </div>
               </div>
               <div className="how-to-step">
-                <div className="step-icon bg-secondary/20 text-secondary"><Clock size={24} /></div>
+                <div className="step-icon" style={{ background: 'rgba(249,115,22,0.2)', color: '#f97316' }}><Clock size={24} /></div>
                 <div>
-                  <h4 className="text-[var(--text-primary)] font-bold mb-1 text-sm">90 Seconds</h4>
-                  <p className="text-xs text-[var(--text-muted)] leading-relaxed">Once connected, you have 90 seconds to get through as many words as possible.</p>
+                  <h4>90 Seconds</h4>
+                  <p>Once connected, you have 90 seconds to get through as many words as possible.</p>
                 </div>
               </div>
               <div className="how-to-step">
-                <div className="step-icon bg-accent/20 text-accent"><Play size={24} /></div>
+                <div className="step-icon" style={{ background: 'rgba(250,204,21,0.2)', color: '#facc15' }}><Play size={24} /></div>
                 <div>
-                  <h4 className="text-[var(--text-primary)] font-bold mb-1 text-sm">Give Hints</h4>
-                  <p className="text-xs text-[var(--text-muted)] leading-relaxed">Describe the word to the AI without saying it. The AI will try to guess!</p>
+                  <h4>Give Hints</h4>
+                  <p>Describe the word to the AI without saying it. The AI will try to guess!</p>
                 </div>
               </div>
               <div className="how-to-step">
-                <div className="step-icon bg-success/20 text-success"><CheckCircle2 size={24} /></div>
+                <div className="step-icon" style={{ background: 'rgba(34,197,94,0.2)', color: '#22c55e' }}><CheckCircle2 size={24} /></div>
                 <div>
-                  <h4 className="text-[var(--text-primary)] font-bold mb-1 text-sm">Correct (+100 pts)</h4>
-                  <p className="text-xs text-[var(--text-muted)] leading-relaxed">Tap Correct when the AI guesses right. Each correct answer = 100 points!</p>
+                  <h4>Correct (+100 pts)</h4>
+                  <p>Tap Correct when the AI guesses right. Each correct answer = 100 points!</p>
                 </div>
               </div>
               <div className="how-to-step">
-                <div className="step-icon bg-danger/20 text-danger"><X size={24} /></div>
+                <div className="step-icon" style={{ background: 'rgba(239,68,68,0.2)', color: '#ef4444' }}><X size={24} /></div>
                 <div>
-                  <h4 className="text-[var(--text-primary)] font-bold mb-1 text-sm">Wrong (-50 pts)</h4>
-                  <p className="text-xs text-[var(--text-muted)] leading-relaxed">If you accidentally say the word or the AI gives up, tap Wrong. Watch out, you lose 50 points!</p>
+                  <h4>Wrong (-50 pts)</h4>
+                  <p>If you accidentally say the word or the AI gives up, tap Wrong. Watch out, you lose 50 points!</p>
                 </div>
               </div>
 
               <div className="pro-tip">
                 <div className="flex items-center gap-2 mb-2">
-                  <Zap size={18} className="text-accent" />
-                  <span className="font-black text-xs text-accent uppercase tracking-wider">Pro Tip</span>
+                  <Zap size={18} style={{ color: '#facc15' }} />
+                  <span className="font-black text-xs uppercase tracking-wider" style={{ color: '#facc15' }}>Pro Tip</span>
                 </div>
-                <p className="text-xs text-[var(--text-secondary)] leading-relaxed font-medium">
-                  Skip the word if it's too difficult! Stick to <span className="text-white font-bold">simple keywords</span> instead of sentences so the AI can guess faster.
+                <p className="text-xs leading-relaxed font-medium" style={{ color: 'var(--text-secondary)' }}>
+                  Skip the word if it's too difficult! Stick to <span style={{ color: 'var(--text-primary)', fontWeight: 700 }}>simple keywords</span> instead of sentences so the AI can guess faster.
                 </p>
               </div>
 
               <div className="h-10" />
 
-              {/* Start Game Button Moved here */}
-              {gameState === 'onboarding' && isAuthenticated && (
+              {/* Start Game Button — shown when category is picked and we're in the rules modal */}
+              {selectedCategory && (
                 <button
                   onClick={startGame}
                   className="btn-primary w-full shadow-xl"
                 >
                   <Sparkles size={20} />
-                  Let's Play!
+                  Let's Play — {CATEGORIES[selectedCategory]?.emoji} {CATEGORIES[selectedCategory]?.label}!
                 </button>
               )}
             </motion.div>
