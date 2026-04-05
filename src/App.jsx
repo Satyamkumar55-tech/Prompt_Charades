@@ -51,6 +51,7 @@ const App = () => {
   const [showHowToPlay, setShowHowToPlay] = useState(false);
   const [isVoiceConnected, setIsVoiceConnected] = useState(false);
   const [aiHasGuessed, setAiHasGuessed] = useState(false); // true only when AI makes a real word guess
+  const [userSaidWord, setUserSaidWord] = useState(false); // true when user accidentally says the word
   const thinkingTimeoutRef = useRef(null);
 
   // Hooks
@@ -89,6 +90,7 @@ const App = () => {
     setTranscript('');
     setLastAiGuess('');
     setAiHasGuessed(false);
+    setUserSaidWord(false);
     setIsThinking(false);
     cancelSpeech();
     if (thinkingTimeoutRef.current) clearTimeout(thinkingTimeoutRef.current);
@@ -123,6 +125,7 @@ const App = () => {
        if (!isSpeaking) {
           cancelSpeech();
           setIsThinking(true);
+          setUserSaidWord(true);
           thinkingTimeoutRef.current = setTimeout(() => {
              const guess = `You just said ${currentWordData.word}!`;
              setLastAiGuess(guess);
@@ -555,18 +558,26 @@ const App = () => {
             <div className="action-grid">
               <button
                 onClick={() => nextWord('correct')}
-                className={`action-btn success ${!aiHasGuessed ? 'disabled' : ''}`}
-                disabled={!aiHasGuessed}
-                title={!aiHasGuessed ? 'Wait for the AI to guess first!' : ''}
+                className={`action-btn success ${!aiHasGuessed || userSaidWord ? 'disabled' : ''}`}
+                disabled={!aiHasGuessed || userSaidWord}
+                title={userSaidWord ? "You can't get points if you say the word!" : (!aiHasGuessed ? 'Wait for the AI to guess first!' : '')}
               >
                 <CheckCircle2 size={24} />
                 Correct
               </button>
-              <button onClick={() => nextWord('wrong')} className="action-btn danger">
+              <button 
+                onClick={() => nextWord('wrong')} 
+                className={`action-btn danger ${userSaidWord ? 'animate-pulse ring-4 ring-danger/50 shadow-[0_0_20px_rgba(239,68,68,0.5)]' : ''}`}
+              >
                 <X size={24} />
                 Wrong
               </button>
-              <button onClick={() => nextWord('skipped')} className="action-btn warning">
+              <button 
+                onClick={() => nextWord('skipped')} 
+                className={`action-btn warning ${userSaidWord ? 'disabled' : ''}`}
+                disabled={userSaidWord}
+                title={userSaidWord ? "You must take the penalty for saying the word!" : ""}
+              >
                 <SkipForward size={24} />
                 Skip
               </button>
