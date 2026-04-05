@@ -75,9 +75,10 @@ const App = () => {
       setGameState('results');
       stopListening();
       setIsVoiceConnected(false);
+      cancelSpeech();
     }
     return () => clearInterval(timer);
-  }, [gameState, timeLeft, isVoiceConnected, stopListening]);
+  }, [gameState, timeLeft, isVoiceConnected, stopListening, cancelSpeech]);
 
   const connectVoice = () => {
     setIsVoiceConnected(true);
@@ -121,6 +122,7 @@ const App = () => {
 
     const userText = text.toLowerCase();
 
+    // ── Guard: user said the actual word ──────────────────────────────────────
     if (userText.includes(currentWordData.word.toLowerCase())) {
        if (!isSpeaking) {
           cancelSpeech();
@@ -136,27 +138,52 @@ const App = () => {
        return;
     }
 
-    const match = currentWordData.keywords.find(keyword => {
+    // ── Tier 1: keyword matches the CURRENT word → correct guess ─────────────
+    const correctMatch = currentWordData.keywords.find(keyword => {
       const regex = new RegExp(`\\b${keyword.toLowerCase()}\\b`, 'i');
       return regex.test(userText);
     });
 
-    if (match) {
-      // Cancel any ongoing speech so the AI responds faster
+    if (correctMatch) {
       cancelSpeech();
       setIsThinking(true);
       thinkingTimeoutRef.current = setTimeout(() => {
         const guess = `${currentWordData.word}?`;
         setLastAiGuess(guess);
-        setAiHasGuessed(true); // AI made a real guess — enable Correct button
+        setAiHasGuessed(true);
         speak(`Is it ${currentWordData.word}?`);
         setIsThinking(false);
       }, 500);
-    } else if (!match && isFinal && !isSpeaking) {
-      // Only fire fallback occasionally, and with a longer delay to avoid blocking
+      return;
+    }
+
+    // ── Tier 2: keyword matches a DIFFERENT word → plausible wrong guess ──────
+    // Collect all OTHER words in the pool that share a keyword with the transcript
+    const wrongGuessCandidate = activeWordPool.find((wordData, idx) => {
+      if (idx === currentWordIndex) return false; // skip current word
+      return wordData.keywords.some(keyword => {
+        const regex = new RegExp(`\\b${keyword.toLowerCase()}\\b`, 'i');
+        return regex.test(userText);
+      });
+    });
+
+    if (wrongGuessCandidate && !isSpeaking) {
+      cancelSpeech();
       setIsThinking(true);
       thinkingTimeoutRef.current = setTimeout(() => {
-        const fallbacks = ["Hmm, tell me more.", "Give me another hint!", "I need more clues.", "Keep going!"];
+        const guess = `${wrongGuessCandidate.word}?`;
+        setLastAiGuess(guess);
+        speak(`Is it ${wrongGuessCandidate.word}?`);
+        setIsThinking(false);
+      }, 500);
+      return;
+    }
+
+    // ── Tier 3: no match at all → fallback prompt ─────────────────────────────
+    if (isFinal && !isSpeaking) {
+      setIsThinking(true);
+      thinkingTimeoutRef.current = setTimeout(() => {
+        const fallbacks = ["Hmm, tell me more.", "Give me another hint!", "I need more clues.", "Keep going!", "Describe it differently!"];
         const fallbackTalk = fallbacks[Math.floor(Math.random() * fallbacks.length)];
         setLastAiGuess(fallbackTalk);
         speak(fallbackTalk);
@@ -534,7 +561,7 @@ const App = () => {
                       className="bg-black/10 border border-glass-border rounded-[2rem] px-6 sm:px-10 py-6 flex items-center gap-4 shadow-xl max-w-full"
                     >
                       <Volume2 className="text-primary shrink-0" size={32} />
-                      <span className="text-2xl sm:text-4xl font-black text-[var(--text)] italic tracking-tighter truncate">"{lastAiGuess}"</span>
+                      <span className="text-2xl sm:text-4xl font-black text-[var(--text-primary)] italic tracking-tighter truncate">"{lastAiGuess}"</span>
                     </motion.div>
                   )}
                 </AnimatePresence>
@@ -560,7 +587,7 @@ const App = () => {
                 onClick={() => nextWord('correct')}
                 className={`action-btn success ${!aiHasGuessed || userSaidWord ? 'disabled' : ''}`}
                 disabled={!aiHasGuessed || userSaidWord}
-                title={userSaidWord ? "You can't get points if you say the word!" : (!aiHasGuessed ? 'Wait for the AI to guess first!' : '')}
+                title={userSaidWord ? "You can't get points if you say the word!" : (!aiHasGuessed ? 'Wait for the AI to guess correctly!' : '')}
               >
                 <CheckCircle2 size={24} />
                 Correct
