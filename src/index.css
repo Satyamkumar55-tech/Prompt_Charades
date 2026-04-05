@@ -36,8 +36,9 @@ body {
   font-family: var(--font-main);
   background-color: #5b4b5a; /* Fallback */
   color: var(--text);
-  overflow: hidden;
-  height: 100vh;
+  overflow-x: hidden;
+  overflow-y: auto;
+  min-height: 100vh;
 }
 
 .app-bg {
@@ -51,11 +52,12 @@ body {
 }
 
 #root {
-  height: 100vh;
+  min-height: 100vh;
   display: flex;
   flex-direction: column;
   align-items: center;
   justify-content: center;
+  padding: 4rem 1rem;
 }
 
 /* Glass & Card Styling */
@@ -329,6 +331,26 @@ body {
 .action-btn.success { background: #2f4f4f; color: #4ade80; }
 .action-btn.danger { background: #5a1e1e; color: #f87171; }
 .action-btn.warning { background: #5a4b1e; color: #fbbf24; }
+
+.action-btn.disabled,
+.action-btn:disabled {
+  opacity: 0.3;
+  cursor: not-allowed;
+  transform: none !important;
+  filter: grayscale(0.5);
+}
+
+/* Timer Critical State — last 10 seconds */
+.hud-timer.timer-critical {
+  border: 2px solid #ef4444;
+  animation: timerPulse 0.8s ease-in-out infinite;
+  box-shadow: 0 0 20px rgba(239, 68, 68, 0.3), 0 0 60px rgba(239, 68, 68, 0.1);
+}
+
+@keyframes timerPulse {
+  0%, 100% { border-color: #ef4444; box-shadow: 0 0 20px rgba(239,68,68,0.3); }
+  50% { border-color: #fca5a5; box-shadow: 0 0 35px rgba(239,68,68,0.5); }
+}
 
 /* Modal */
 .modal-overlay {
