@@ -4,8 +4,6 @@
 
 Welcome to **Prompt Charades** — an interactive, AI-powered twist on the classic party game! Instead of you guessing what your friends are acting out, the roles are reversed: **you give the verbal hints, and an AI Voice Agent tries to guess the word!**
 
-![Prompt Charades Banner](https://via.placeholder.com/800x400/1e1b4b/ffffff?text=Prompt+Charades)
-
 ## ✨ Features
 - **🗣️ AI Voice Agent:** Connects directly to your browser's microphone using the Web Speech API and talks back to you in real-time using Speech Synthesis.
 - **⚡ Fast-Paced Gameplay:** You have exactly 90 seconds to rattle off as many hints as you can. Get the AI to guess correctly to stack up your score!
