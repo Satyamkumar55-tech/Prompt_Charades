@@ -1,4 +1,4 @@
-import { useState, useCallback, useRef, useEffect } from 'react';
+ import { useState, useCallback, useRef, useEffect } from 'react';
 
 const useSpeechToText = (onTranscript) => {
   const [isListening, setIsListening] = useState(false);

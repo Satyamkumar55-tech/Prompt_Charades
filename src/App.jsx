@@ -4,7 +4,8 @@ import {
   Gamepad2, Mic, MicOff, Trophy, X, SkipForward, Play,
   RotateCcw, Volume2, Settings, Info, CheckCircle2,
   Sparkles, Zap, BrainCircuit, Heart, User, Mail,
-  Clock, Award, Brain, HelpCircle, Home, ChevronRight, Star
+  Award, Brain, HelpCircle, Home, ChevronRight, Star,
+  ShieldAlert, EyeOff, Clock
 } from 'lucide-react';
 import useSpeechToText from './hooks/useSpeechToText';
 import useTextToSpeech from './hooks/useTextToSpeech';
@@ -52,7 +53,17 @@ const App = () => {
   const [isVoiceConnected, setIsVoiceConnected] = useState(false);
   const [aiHasGuessed, setAiHasGuessed] = useState(false); // true only when AI makes a real word guess
   const [userSaidWord, setUserSaidWord] = useState(false); // true when user accidentally says the word
+  const [detectedKeywords, setDetectedKeywords] = useState([]); // Real-time processed keywords
+  const [isAiListening, setIsAiListening] = useState(false); // For visual feedback of AI "hearing"
+  
   const thinkingTimeoutRef = useRef(null);
+  const aiResponseTimeoutRef = useRef(null); // Ref for the actual speech trigger
+  const timerEndSoundRef = useRef(null);
+
+  // Initialize sound
+  useEffect(() => {
+    timerEndSoundRef.current = new Audio('https://assets.mixkit.co/active_storage/sfx/2568/2568-preview.mp3');
+  }, []);
 
   // Hooks
   const { speak, isSpeaking, cancelSpeech } = useTextToSpeech();
@@ -76,6 +87,15 @@ const App = () => {
       stopListening();
       setIsVoiceConnected(false);
       cancelSpeech();
+      
+      // Play timer end sound
+      if (timerEndSoundRef.current) {
+        timerEndSoundRef.current.play().catch(e => console.error("Sound play failed", e));
+      }
+
+      // Clear any pending AI responses
+      if (thinkingTimeoutRef.current) clearTimeout(thinkingTimeoutRef.current);
+      if (aiResponseTimeoutRef.current) clearTimeout(aiResponseTimeoutRef.current);
     }
     return () => clearInterval(timer);
   }, [gameState, timeLeft, isVoiceConnected, stopListening, cancelSpeech]);
@@ -93,8 +113,10 @@ const App = () => {
     setAiHasGuessed(false);
     setUserSaidWord(false);
     setIsThinking(false);
+    setDetectedKeywords([]);
     cancelSpeech();
     if (thinkingTimeoutRef.current) clearTimeout(thinkingTimeoutRef.current);
+    if (aiResponseTimeoutRef.current) clearTimeout(aiResponseTimeoutRef.current);
     
     let newUsedWords = [...usedWords, currentWordIndex];
     if (newUsedWords.length >= activeWordPool.length) {
@@ -111,16 +133,25 @@ const App = () => {
   }, [usedWords, currentWordIndex, activeWordPool, cancelSpeech]);
 
   const processHint = (text, isFinal) => {
+    if (gameState !== 'playing') return;
     if (text.toLowerCase().includes("ready to play")) return;
     if (text.toLowerCase().includes("give me")) return;
 
     const currentWordData = activeWordPool[currentWordIndex];
     if (!currentWordData) return;
 
-    // Don't process if already thinking
-    if (isThinking) return;
-
     const userText = text.toLowerCase();
+    
+    // Real-time keyword extraction for UI "Neural Map"
+    const discovered = currentWordData.keywords.filter(k => 
+      new RegExp(`\\b${k.toLowerCase()}\\b`, 'i').test(userText)
+    );
+    if (discovered.length > detectedKeywords.length) {
+      setDetectedKeywords(discovered);
+    }
+
+    // Don't process AI response if already thinking or speaking
+    if (isThinking) return;
 
     // ── Guard: user said the actual word ──────────────────────────────────────
     if (userText.includes(currentWordData.word.toLowerCase())) {
@@ -129,6 +160,7 @@ const App = () => {
           setIsThinking(true);
           setUserSaidWord(true);
           thinkingTimeoutRef.current = setTimeout(() => {
+             if (gameState !== 'playing') return; // Safety check
              const guess = `You just said ${currentWordData.word}!`;
              setLastAiGuess(guess);
              speak(`Hey, you aren't allowed to say ${currentWordData.word}! That's the word!`);
@@ -139,38 +171,35 @@ const App = () => {
     }
 
     // ── Tier 1: keyword matches the CURRENT word → correct guess ─────────────
-    const correctMatch = currentWordData.keywords.find(keyword => {
-      const regex = new RegExp(`\\b${keyword.toLowerCase()}\\b`, 'i');
-      return regex.test(userText);
-    });
+    const correctMatch = discovered.length > 0;
 
     if (correctMatch) {
       cancelSpeech();
       setIsThinking(true);
       thinkingTimeoutRef.current = setTimeout(() => {
+        if (gameState !== 'playing') return; // Safety check
         const guess = `${currentWordData.word}?`;
         setLastAiGuess(guess);
         setAiHasGuessed(true);
         speak(`Is it ${currentWordData.word}?`);
         setIsThinking(false);
-      }, 500);
+      }, 400); // Faster response for direct matches
       return;
     }
 
     // ── Tier 2: keyword matches a DIFFERENT word → plausible wrong guess ──────
-    // Collect all OTHER words in the pool that share a keyword with the transcript
     const wrongGuessCandidate = activeWordPool.find((wordData, idx) => {
-      if (idx === currentWordIndex) return false; // skip current word
-      return wordData.keywords.some(keyword => {
-        const regex = new RegExp(`\\b${keyword.toLowerCase()}\\b`, 'i');
-        return regex.test(userText);
-      });
+      if (idx === currentWordIndex) return false;
+      return wordData.keywords.some(keyword => 
+        new RegExp(`\\b${keyword.toLowerCase()}\\b`, 'i').test(userText)
+      );
     });
 
     if (wrongGuessCandidate && !isSpeaking) {
       cancelSpeech();
       setIsThinking(true);
       thinkingTimeoutRef.current = setTimeout(() => {
+        if (gameState !== 'playing') return; 
         const guess = `${wrongGuessCandidate.word}?`;
         setLastAiGuess(guess);
         speak(`Is it ${wrongGuessCandidate.word}?`);
@@ -183,6 +212,7 @@ const App = () => {
     if (isFinal && !isSpeaking) {
       setIsThinking(true);
       thinkingTimeoutRef.current = setTimeout(() => {
+        if (gameState !== 'playing') return;
         const fallbacks = ["Hmm, tell me more.", "Give me another hint!", "I need more clues.", "Keep going!", "Describe it differently!"];
         const fallbackTalk = fallbacks[Math.floor(Math.random() * fallbacks.length)];
         setLastAiGuess(fallbackTalk);
@@ -247,6 +277,7 @@ const App = () => {
     setIsVoiceConnected(false);
     setTranscript('');
     setLastAiGuess('');
+    setDetectedKeywords([]);
     
     const pool = selectedCategory ? CATEGORIES[selectedCategory].words : CHARADES_WORDS;
     const wp = pool;
@@ -449,166 +480,276 @@ const App = () => {
             initial={{ opacity: 0, y: 30 }}
             animate={{ opacity: 1, y: 0 }}
           >
-            {/* Category Badge in playing screen */}
-            {currentCategory && (
-              <div
-                className="playing-cat-badge"
-                style={{ color: currentCategory.color, borderColor: currentCategory.color + '44' }}
-              >
-                <span>{currentCategory.emoji}</span>
-                <span>{currentCategory.label}</span>
-              </div>
-            )}
-
-            {/* Header / Timer HUD */}
-            <div className={`hud-timer shadow-2xl ${timeLeft <= 10 && isVoiceConnected ? 'timer-critical' : ''}`}>
-              <div className="flex justify-between items-center mb-1">
-                <div className="flex items-center gap-2 text-[var(--text-primary)] font-bold">
-                  <Clock size={20} style={{ color: timeLeft <= 10 && isVoiceConnected ? '#ef4444' : 'var(--secondary)' }} />
-                  <span className="text-lg">
-                    {isVoiceConnected ? "Time Left" : "Connect Voice to Start"}
-                  </span>
-                </div>
-                <motion.div
-                  className="font-black font-mono"
-                  style={{
-                    fontSize: '1.875rem',
-                    color: timeLeft <= 10 && isVoiceConnected ? '#ef4444' : 'var(--text-primary)',
-                  }}
-                  animate={
-                    timeLeft <= 10 && isVoiceConnected
-                      ? { scale: [1, 1.25, 1], opacity: [1, 0.7, 1] }
-                      : { scale: 1, opacity: 1 }
-                  }
-                  transition={
-                    timeLeft <= 10 && isVoiceConnected
-                      ? { repeat: Infinity, duration: 0.8, ease: 'easeInOut' }
-                      : {}
-                  }
-                >
-                  {Math.floor(timeLeft / 60)}:{(timeLeft % 60).toString().padStart(2, '0')}
-                </motion.div>
-              </div>
-
-              <div className="progress-bar-container">
-                <motion.div
-                  className="progress-bar-fill"
-                  initial={{ width: "100%" }}
-                  animate={{
-                    width: `${(timeLeft / 90) * 100}%`,
-                    backgroundColor: timeLeft <= 10 && isVoiceConnected ? '#ef4444' : undefined,
-                  }}
-                />
-              </div>
-
-              <p className="text-[10px] text-[var(--text-muted)] font-bold uppercase tracking-wider text-center">
-                Timer starts when you connect the voice agent
-              </p>
-            </div>
-
-            {/* Word Card */}
-            <div className="word-card relative">
-              <p className="text-secondary font-black uppercase tracking-[0.3em] text-[10px] mb-4">Give hints for this word</p>
-
-              <motion.h2
-                key={currentWordIndex}
-                initial={{ opacity: 0, scale: 0.8 }}
-                animate={{ opacity: 1, scale: 1 }}
-                className="word-display text-4xl sm:text-6xl"
-                style={{ color: 'var(--text-primary)' }}
-              >
-                {currentWord}
-              </motion.h2>
-
-              <p className="text-xs font-bold text-[var(--text-muted)] mt-4">Word {usedWords.length} of {activeWordPool.length}</p>
-
-              {/* Voice Status Overlay */}
-              <div className="mt-8 h-10 flex items-center justify-center">
-                {isThinking ? (
-                  <div className="flex gap-1">
-                    {[0, 1, 2].map(i => (
-                      <motion.div
-                        key={i}
-                        animate={{ height: [8, 16, 8], opacity: [0.5, 1, 0.5] }}
-                        transition={{ repeat: Infinity, duration: 0.6, delay: i * 0.1 }}
-                        className="w-1 bg-primary rounded-full"
-                      />
-                    ))}
-                  </div>
-                ) : (
-                  transcript && <p className="text-[var(--text-muted)] italic text-sm text-center">AI heard: "{transcript}"</p>
-                )}
-              </div>
-            </div>
-
-            {/* Connect Button or AI Guess */}
-            <div className="w-full max-w-[600px] h-32 flex items-center justify-center">
+            <AnimatePresence mode="wait">
+              {/* VOICE CONNECTION SCREEN - Only visible before connection */}
               {!isVoiceConnected ? (
-                <button
-                  onClick={connectVoice}
-                  className="btn-pink group"
+                <motion.div
+                  key="connect-screen"
+                  className="w-full flex flex-col items-center justify-center min-h-[500px] gap-8"
+                  initial={{ opacity: 0, scale: 0.95 }}
+                  animate={{ opacity: 1, scale: 1 }}
+                  exit={{ opacity: 0, scale: 0.95 }}
+                  transition={{ duration: 0.4 }}
                 >
-                  <Mic size={24} className="group-hover:scale-110 transition-transform" />
-                  Connect Voice Agent to Start
-                </button>
-              ) : (
-                <AnimatePresence>
-                  {lastAiGuess && (
+                  {/* Category Badge */}
+                  {currentCategory && (
                     <motion.div
-                      key={lastAiGuess}
-                      initial={{ scale: 0.5, opacity: 0 }}
-                      animate={{ scale: 1, opacity: 1 }}
-                      className="bg-black/10 border border-glass-border rounded-[2rem] px-6 sm:px-10 py-6 flex items-center gap-4 shadow-xl max-w-full"
+                      className="playing-cat-badge"
+                      style={{ color: currentCategory.color, borderColor: currentCategory.color + '44' }}
+                      initial={{ opacity: 0, y: -20 }}
+                      animate={{ opacity: 1, y: 0 }}
+                      transition={{ delay: 0.1 }}
                     >
-                      <Volume2 className="text-primary shrink-0" size={32} />
-                      <span className="text-2xl sm:text-4xl font-black text-[var(--text-primary)] italic tracking-tighter truncate">"{lastAiGuess}"</span>
+                      <span>{currentCategory.emoji}</span>
+                      <span>{currentCategory.label}</span>
                     </motion.div>
                   )}
-                </AnimatePresence>
+
+                  {/* Welcome Message */}
+                  <motion.div
+                    className="text-center"
+                    initial={{ opacity: 0, y: 10 }}
+                    animate={{ opacity: 1, y: 0 }}
+                    transition={{ delay: 0.2 }}
+                  >
+                    <h2 className="text-3xl sm:text-5xl font-black text-white mb-4">Ready to Play?</h2>
+                    <p className="text-[var(--text-muted)] text-lg">Connect your voice agent to begin the game!</p>
+                  </motion.div>
+
+                  {/* Connect Button */}
+                  <motion.button
+                    onClick={connectVoice}
+                    className="btn-pink group text-lg px-8 py-5"
+                    initial={{ opacity: 0, y: 20 }}
+                    animate={{ opacity: 1, y: 0 }}
+                    transition={{ delay: 0.3 }}
+                    whileHover={{ scale: 1.05 }}
+                    whileTap={{ scale: 0.95 }}
+                  >
+                    <Mic size={28} className="group-hover:scale-110 transition-transform" />
+                    Connect Voice Agent to Start
+                  </motion.button>
+
+                  {/* Info Message */}
+                  <motion.p
+                    className="text-[var(--text-muted)] text-sm text-center max-w-md"
+                    initial={{ opacity: 0 }}
+                    animate={{ opacity: 1 }}
+                    transition={{ delay: 0.4 }}
+                  >
+                    You'll have <span className="font-black text-accent">90 seconds</span> to give hints to the AI. Good luck!
+                  </motion.p>
+                </motion.div>
+              ) : (
+                /* GAME SCREEN - Visible after connection */
+                <motion.div
+                  key="game-screen"
+                  className="w-full flex flex-col items-center gap-10"
+                  initial={{ opacity: 0, scale: 0.95 }}
+                  animate={{ opacity: 1, scale: 1 }}
+                  exit={{ opacity: 0, scale: 0.95 }}
+                  transition={{ duration: 0.5 }}
+                >
+                  {/* Category Badge in playing screen */}
+                  {currentCategory && (
+                    <motion.div
+                      className="playing-cat-badge"
+                      style={{ color: currentCategory.color, borderColor: currentCategory.color + '44' }}
+                      initial={{ opacity: 0, y: -15 }}
+                      animate={{ opacity: 1, y: 0 }}
+                    >
+                      <span>{currentCategory.emoji}</span>
+                      <span>{currentCategory.label}</span>
+                    </motion.div>
+                  )}
+
+                  {/* Header / Timer HUD */}
+                  <motion.div
+                    className={`hud-timer shadow-2xl ${timeLeft <= 10 && isVoiceConnected ? 'timer-critical' : ''}`}
+                    initial={{ opacity: 0, y: -20 }}
+                    animate={{ opacity: 1, y: 0 }}
+                    transition={{ delay: 0.1 }}
+                  >
+                    <div className="flex justify-between items-center mb-1">
+                      <div className="flex items-center gap-2 text-[var(--text-primary)] font-bold">
+                        <Clock size={20} style={{ color: timeLeft <= 10 && isVoiceConnected ? '#ef4444' : 'var(--secondary)' }} />
+                        <span className="text-lg">Time Left</span>
+                      </div>
+                      <motion.div
+                        className="font-black font-mono"
+                        style={{
+                          fontSize: '1.875rem',
+                          color: timeLeft <= 10 && isVoiceConnected ? '#ef4444' : 'var(--text-primary)',
+                        }}
+                        animate={
+                          timeLeft <= 10 && isVoiceConnected
+                            ? { scale: [1, 1.25, 1], opacity: [1, 0.7, 1] }
+                            : { scale: 1, opacity: 1 }
+                        }
+                        transition={
+                          timeLeft <= 10 && isVoiceConnected
+                            ? { repeat: Infinity, duration: 0.8, ease: 'easeInOut' }
+                            : {}
+                        }
+                      >
+                        {Math.floor(timeLeft / 60)}:{(timeLeft % 60).toString().padStart(2, '0')}
+                      </motion.div>
+                    </div>
+
+                    <div className="progress-bar-container">
+                      <motion.div
+                        className="progress-bar-fill"
+                        initial={{ width: "100%" }}
+                        animate={{
+                          width: `${(timeLeft / 90) * 100}%`,
+                          backgroundColor: timeLeft <= 10 && isVoiceConnected ? '#ef4444' : undefined,
+                        }}
+                      />
+                    </div>
+
+                    <p className="text-[10px] text-[var(--text-muted)] font-bold uppercase tracking-wider text-center">
+                      Game in progress
+                    </p>
+                  </motion.div>
+
+                  {/* Word Card */}
+                  <motion.div
+                    className="word-card relative"
+                    initial={{ opacity: 0, scale: 0.9 }}
+                    animate={{ opacity: 1, scale: 1 }}
+                    transition={{ delay: 0.2 }}
+                  >
+                    <div className="privacy-badge">
+                      <EyeOff size={14} />
+                      <span>Private: For Player Only</span>
+                    </div>
+
+                    <p className="text-secondary font-black uppercase tracking-[0.3em] text-[10px] mb-4">Give hints for this word</p>
+
+                    <motion.h2
+                      key={currentWordIndex}
+                      initial={{ opacity: 0, scale: 0.8 }}
+                      animate={{ opacity: 1, scale: 1 }}
+                      className="word-display text-4xl sm:text-6xl"
+                      style={{ color: 'var(--text-primary)' }}
+                    >
+                      {currentWord}
+                    </motion.h2>
+
+                    <p className="text-xs font-bold text-[var(--text-muted)] mt-4">Word {usedWords.length} of {activeWordPool.length}</p>
+
+                    {/* Voice Status Overlay */}
+                    <div className="mt-8 h-10 flex items-center justify-center">
+                      {isThinking ? (
+                        <div className="flex flex-col items-center gap-3">
+                          <div className="flex gap-1">
+                            {[0, 1, 2].map(i => (
+                              <motion.div
+                                key={i}
+                                animate={{ height: [8, 16, 8], opacity: [0.5, 1, 0.5] }}
+                                transition={{ repeat: Infinity, duration: 0.6, delay: i * 0.1 }}
+                                className="w-1 bg-primary rounded-full"
+                              />
+                            ))}
+                          </div>
+                          <span className="text-[10px] uppercase font-black tracking-widest text-primary animate-pulse">Neural Processing...</span>
+                        </div>
+                      ) : (
+                        <div className="flex flex-col items-center">
+                          {transcript && <p className="text-[var(--text-muted)] italic text-sm text-center mb-2">AI heard: "{transcript}"</p>}
+                          <div className="neural-container">
+                            {detectedKeywords.map((kw, i) => (
+                              <motion.div 
+                                key={i + kw}
+                                className="neural-keyword"
+                                initial={{ opacity: 0, x: -10 }}
+                                animate={{ opacity: 1, x: 0 }}
+                              >
+                                <span /> {kw}
+                              </motion.div>
+                            ))}
+                          </div>
+                        </div>
+                      )}
+                    </div>
+                  </motion.div>
+
+                  {/* AI Guess Display */}
+                  <motion.div
+                    className="w-full max-w-[600px] h-32 flex items-center justify-center"
+                    initial={{ opacity: 0 }}
+                    animate={{ opacity: 1 }}
+                    transition={{ delay: 0.3 }}
+                  >
+                    <AnimatePresence>
+                      {lastAiGuess && (
+                        <motion.div
+                          key={lastAiGuess}
+                          initial={{ scale: 0.5, opacity: 0 }}
+                          animate={{ scale: 1, opacity: 1 }}
+                          className="bg-black/10 border border-glass-border rounded-[2rem] px-6 sm:px-10 py-6 flex items-center gap-4 shadow-xl max-w-full"
+                        >
+                          <Volume2 className="text-primary shrink-0" size={32} />
+                          <span className="text-2xl sm:text-4xl font-black text-[var(--text-primary)] italic tracking-tighter truncate">"{lastAiGuess}"</span>
+                        </motion.div>
+                      )}
+                    </AnimatePresence>
+                  </motion.div>
+
+                  {/* Score HUD */}
+                  <motion.div
+                    className="flex gap-10 items-center justify-center mb-[-1rem]"
+                    initial={{ opacity: 0 }}
+                    animate={{ opacity: 1 }}
+                    transition={{ delay: 0.2 }}
+                  >
+                    <div className="flex items-center gap-2 text-[var(--text-muted)] font-black text-sm">
+                      <Trophy size={20} className="text-secondary" /> {score.correct}
+                    </div>
+                    <div className="flex items-center gap-2 text-[var(--text-muted)] font-black text-sm">
+                      <X size={20} className="text-danger" /> {score.wrong}
+                    </div>
+                    <div className="flex items-center gap-2 text-[var(--text-muted)] font-black text-sm">
+                      <SkipForward size={20} className="text-yellow-500" /> {score.skipped}
+                    </div>
+                  </motion.div>
+
+                  {/* Action Grid */}
+                  <motion.div
+                    className="action-grid"
+                    initial={{ opacity: 0, y: 20 }}
+                    animate={{ opacity: 1, y: 0 }}
+                    transition={{ delay: 0.3 }}
+                  >
+                    <button
+                      onClick={() => nextWord('correct')}
+                      className={`action-btn success ${!aiHasGuessed || userSaidWord ? 'disabled' : ''}`}
+                      disabled={!aiHasGuessed || userSaidWord}
+                      title={userSaidWord ? "You can't get points if you say the word!" : (!aiHasGuessed ? 'Wait for the AI to guess correctly!' : '')}
+                    >
+                      <CheckCircle2 size={24} />
+                      Correct
+                    </button>
+                    <button 
+                      onClick={() => nextWord('wrong')} 
+                      className={`action-btn danger ${userSaidWord ? 'animate-pulse ring-4 ring-danger/50 shadow-[0_0_20px_rgba(239,68,68,0.5)]' : ''}`}
+                    >
+                      <X size={24} />
+                      Wrong
+                    </button>
+                    <button 
+                      onClick={() => nextWord('skipped')} 
+                      className={`action-btn warning ${userSaidWord ? 'disabled' : ''}`}
+                      disabled={userSaidWord}
+                      title={userSaidWord ? "You must take the penalty for saying the word!" : ""}
+                    >
+                      <SkipForward size={24} />
+                      Skip
+                    </button>
+                  </motion.div>
+                </motion.div>
               )}
-            </div>
-
-            {/* Score HUD */}
-            <div className="flex gap-10 items-center justify-center mb-[-1rem]">
-              <div className="flex items-center gap-2 text-[var(--text-muted)] font-black text-sm">
-                <Trophy size={20} className="text-secondary" /> {score.correct}
-              </div>
-              <div className="flex items-center gap-2 text-[var(--text-muted)] font-black text-sm">
-                <X size={20} className="text-danger" /> {score.wrong}
-              </div>
-              <div className="flex items-center gap-2 text-[var(--text-muted)] font-black text-sm">
-                <SkipForward size={20} className="text-yellow-500" /> {score.skipped}
-              </div>
-            </div>
-
-            {/* Action Grid */}
-            <div className="action-grid">
-              <button
-                onClick={() => nextWord('correct')}
-                className={`action-btn success ${!aiHasGuessed || userSaidWord ? 'disabled' : ''}`}
-                disabled={!aiHasGuessed || userSaidWord}
-                title={userSaidWord ? "You can't get points if you say the word!" : (!aiHasGuessed ? 'Wait for the AI to guess correctly!' : '')}
-              >
-                <CheckCircle2 size={24} />
-                Correct
-              </button>
-              <button 
-                onClick={() => nextWord('wrong')} 
-                className={`action-btn danger ${userSaidWord ? 'animate-pulse ring-4 ring-danger/50 shadow-[0_0_20px_rgba(239,68,68,0.5)]' : ''}`}
-              >
-                <X size={24} />
-                Wrong
-              </button>
-              <button 
-                onClick={() => nextWord('skipped')} 
-                className={`action-btn warning ${userSaidWord ? 'disabled' : ''}`}
-                disabled={userSaidWord}
-                title={userSaidWord ? "You must take the penalty for saying the word!" : ""}
-              >
-                <SkipForward size={24} />
-                Skip
-              </button>
-            </div>
+            </AnimatePresence>
           </motion.div>
         )}
 
