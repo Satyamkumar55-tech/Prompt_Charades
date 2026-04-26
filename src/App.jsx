@@ -75,7 +75,7 @@ const App = () => {
     }
   };
 
-  const { isListening, startListening, stopListening, error: speechError } = useSpeechToText(handleTranscript);
+  const { isListening, startListening, stopListening, error: speechError, forceRestart, isReady } = useSpeechToText(handleTranscript);
 
   // Timer logic
   useEffect(() => {
@@ -99,6 +99,26 @@ const App = () => {
     }
     return () => clearInterval(timer);
   }, [gameState, timeLeft, isVoiceConnected, stopListening, cancelSpeech]);
+
+  // Heartbeat monitor: silently restart speech recognition if it stops during gameplay
+  useEffect(() => {
+    let heartbeatInterval = null;
+    
+    // Only run heartbeat during active gameplay
+    if (gameState === 'playing' && isVoiceConnected) {
+      heartbeatInterval = setInterval(() => {
+        // If we should be listening but aren't, force restart silently
+        if (!isListening && isVoiceConnected) {
+          console.log('Speech recognition stopped, forcing silent restart...');
+          forceRestart();
+        }
+      }, 3000); // Check every 3 seconds (more frequent monitoring)
+    }
+    
+    return () => {
+      if (heartbeatInterval) clearInterval(heartbeatInterval);
+    };
+  }, [gameState, isVoiceConnected, isListening, forceRestart]);
 
   const connectVoice = () => {
     setIsVoiceConnected(true);
@@ -619,10 +639,6 @@ const App = () => {
                     animate={{ opacity: 1, scale: 1 }}
                     transition={{ delay: 0.2 }}
                   >
-                    <div className="privacy-badge">
-                      <EyeOff size={14} />
-                      <span>Private: For Player Only</span>
-                    </div>
 
                     <p className="text-secondary font-black uppercase tracking-[0.3em] text-[10px] mb-4">Give hints for this word</p>
 
@@ -698,19 +714,47 @@ const App = () => {
 
                   {/* Score HUD */}
                   <motion.div
-                    className="flex gap-10 items-center justify-center mb-[-1rem]"
+                    className="flex gap-6 items-center justify-center mb-2 flex-wrap px-4"
                     initial={{ opacity: 0 }}
                     animate={{ opacity: 1 }}
                     transition={{ delay: 0.2 }}
                   >
-                    <div className="flex items-center gap-2 text-[var(--text-muted)] font-black text-sm">
-                      <Trophy size={20} className="text-secondary" /> {score.correct}
-                    </div>
-                    <div className="flex items-center gap-2 text-[var(--text-muted)] font-black text-sm">
-                      <X size={20} className="text-danger" /> {score.wrong}
-                    </div>
-                    <div className="flex items-center gap-2 text-[var(--text-muted)] font-black text-sm">
-                      <SkipForward size={20} className="text-yellow-500" /> {score.skipped}
+                    <motion.div 
+                      className="flex items-center gap-3 bg-gradient-to-r from-green-500/20 to-emerald-500/20 border border-green-400/50 rounded-full px-4 py-2 backdrop-blur-sm shadow-lg hover:shadow-green-500/50 shadow-green-500/30 transition-all hover:scale-105 cursor-pointer"
+                      whileHover={{ scale: 1.08 }}
+                      whileTap={{ scale: 0.95 }}
+                    >
+                      <Trophy size={22} className="text-green-400 animate-bounce" style={{ animationDelay: '0s' }} /> 
+                      <span className="font-black text-lg text-green-300">{score.correct}</span>
+                    </motion.div>
+                    <motion.div 
+                      className="flex items-center gap-3 bg-gradient-to-r from-red-500/20 to-rose-500/20 border border-red-400/50 rounded-full px-4 py-2 backdrop-blur-sm shadow-lg hover:shadow-red-500/50 shadow-red-500/30 transition-all hover:scale-105 cursor-pointer"
+                      whileHover={{ scale: 1.08 }}
+                      whileTap={{ scale: 0.95 }}
+                    >
+                      <X size={22} className="text-red-400 animate-bounce" style={{ animationDelay: '0.1s' }} /> 
+                      <span className="font-black text-lg text-red-300">{score.wrong}</span>
+                    </motion.div>
+                    <motion.div 
+                      className="flex items-center gap-3 bg-gradient-to-r from-yellow-500/20 to-amber-500/20 border border-yellow-400/50 rounded-full px-4 py-2 backdrop-blur-sm shadow-lg hover:shadow-yellow-500/50 shadow-yellow-500/30 transition-all hover:scale-105 cursor-pointer"
+                      whileHover={{ scale: 1.08 }}
+                      whileTap={{ scale: 0.95 }}
+                    >
+                      <SkipForward size={22} className="text-yellow-400 animate-bounce" style={{ animationDelay: '0.2s' }} /> 
+                      <span className="font-black text-lg text-yellow-300">{score.skipped}</span>
+                    </motion.div>
+                  </motion.div>
+                  
+                  {/* Total Points Display */}
+                  <motion.div
+                    className="mb-4 mt-2 text-center"
+                    initial={{ opacity: 0 }}
+                    animate={{ opacity: 1 }}
+                    transition={{ delay: 0.3 }}
+                  >
+                    <div className="inline-block bg-gradient-to-r from-purple-600/30 to-blue-600/30 border border-purple-400/50 rounded-2xl px-6 py-3 backdrop-blur-sm shadow-lg shadow-purple-500/30">
+                      <p className="text-[10px] text-purple-300 font-black uppercase tracking-widest mb-1">Total Points</p>
+                      <p className="text-3xl font-black bg-gradient-to-r from-purple-300 to-blue-300 bg-clip-text text-transparent">{score.correct * 100 - score.wrong * 50}</p>
                     </div>
                   </motion.div>
 
@@ -774,27 +818,73 @@ const App = () => {
               </div>
             )}
 
-            <div className="grid grid-cols-1 sm:grid-cols-3 gap-6 mb-8 w-full">
-              <div className="bg-[var(--surface-secondary)] p-6 rounded-2xl border border-glass-border flex flex-col items-center justify-center shadow-lg transition-transform hover:scale-[1.05]">
-                <span className="text-4xl font-black text-success leading-none">{score.correct}</span>
-                <p className="text-[10px] text-[var(--text-muted)] font-black uppercase tracking-widest mt-2">Correct</p>
-              </div>
-              <div className="bg-[var(--surface-secondary)] p-6 rounded-2xl border border-glass-border flex flex-col items-center justify-center shadow-lg transition-transform hover:scale-[1.05]">
-                <span className="text-4xl font-black text-danger leading-none">{score.wrong}</span>
-                <p className="text-[10px] text-[var(--text-muted)] font-black uppercase tracking-widest mt-2">Wrong</p>
-              </div>
-              <div className="bg-[var(--surface-secondary)] p-6 rounded-2xl border border-glass-border flex flex-col items-center justify-center shadow-lg transition-transform hover:scale-[1.05]">
-                <span className="text-4xl font-black text-accent leading-none">{score.skipped}</span>
-                <p className="text-[10px] text-[var(--text-muted)] font-black uppercase tracking-widest mt-2">Skipped</p>
-              </div>
+            <div className="grid grid-cols-1 sm:grid-cols-3 gap-6 mb-8 w-full px-2">
+              <motion.div 
+                className="bg-gradient-to-br from-green-500/15 to-emerald-600/15 p-8 rounded-3xl border-2 border-green-400/40 flex flex-col items-center justify-center shadow-xl shadow-green-500/20 hover:shadow-green-500/50 transition-all cursor-pointer group"
+                whileHover={{ scale: 1.08, y: -5 }}
+                whileTap={{ scale: 0.95 }}
+              >
+                <motion.div animate={{ y: [0, -8, 0] }} transition={{ duration: 2, repeat: Infinity }}>
+                  <Trophy size={40} className="text-green-400 mb-3 group-hover:scale-125 transition-transform" />
+                </motion.div>
+                <span className="text-6xl font-black text-green-300 leading-none">{score.correct}</span>
+                <p className="text-xs text-green-200 font-black uppercase tracking-widest mt-4 bg-green-500/20 px-3 py-1 rounded-full border border-green-400/50">Correct Guesses</p>
+              </motion.div>
+              
+              <motion.div 
+                className="bg-gradient-to-br from-red-500/15 to-rose-600/15 p-8 rounded-3xl border-2 border-red-400/40 flex flex-col items-center justify-center shadow-xl shadow-red-500/20 hover:shadow-red-500/50 transition-all cursor-pointer group"
+                whileHover={{ scale: 1.08, y: -5 }}
+                whileTap={{ scale: 0.95 }}
+              >
+                <motion.div animate={{ rotate: [0, -10, 10, 0] }} transition={{ duration: 1.5, repeat: Infinity }}>
+                  <X size={40} className="text-red-400 mb-3 group-hover:scale-125 transition-transform" />
+                </motion.div>
+                <span className="text-6xl font-black text-red-300 leading-none">{score.wrong}</span>
+                <p className="text-xs text-red-200 font-black uppercase tracking-widest mt-4 bg-red-500/20 px-3 py-1 rounded-full border border-red-400/50">Wrong Guesses</p>
+              </motion.div>
+              
+              <motion.div 
+                className="bg-gradient-to-br from-yellow-500/15 to-amber-600/15 p-8 rounded-3xl border-2 border-yellow-400/40 flex flex-col items-center justify-center shadow-xl shadow-yellow-500/20 hover:shadow-yellow-500/50 transition-all cursor-pointer group"
+                whileHover={{ scale: 1.08, y: -5 }}
+                whileTap={{ scale: 0.95 }}
+              >
+                <motion.div animate={{ x: [0, -8, 8, 0] }} transition={{ duration: 1.5, repeat: Infinity }}>
+                  <SkipForward size={40} className="text-yellow-400 mb-3 group-hover:scale-125 transition-transform" />
+                </motion.div>
+                <span className="text-6xl font-black text-yellow-300 leading-none">{score.skipped}</span>
+                <p className="text-xs text-yellow-200 font-black uppercase tracking-widest mt-4 bg-yellow-500/20 px-3 py-1 rounded-full border border-yellow-400/50">Skipped Words</p>
+              </motion.div>
             </div>
 
-            <div className="bg-black/10 py-8 px-6 rounded-3xl flex flex-col items-center justify-center border border-glass-border shadow-inner w-full mb-10">
-               <span className="text-[10px] text-[var(--text-muted)] font-black tracking-[0.3em] uppercase mb-2">Total Points</span>
-               <span className="text-6xl sm:text-7xl font-black text-transparent bg-clip-text bg-gradient-to-r from-accent via-secondary to-primary drop-shadow-lg">
+            <motion.div 
+              className="bg-gradient-to-r from-purple-600/20 via-blue-600/20 to-cyan-600/20 py-10 px-8 rounded-3xl flex flex-col items-center justify-center border-2 border-purple-400/50 shadow-2xl shadow-purple-500/30 w-full mb-10"
+              initial={{ scale: 0.8, opacity: 0 }}
+              animate={{ scale: 1, opacity: 1 }}
+              transition={{ delay: 0.3 }}
+              whileHover={{ shadow: '0 0 40px rgba(168, 85, 247, 0.6)' }}
+            >
+               <motion.span 
+                 className="text-xs text-purple-300 font-black tracking-[0.4em] uppercase mb-3 block"
+                 animate={{ letterSpacing: ['0.4em', '0.5em', '0.4em'] }}
+                 transition={{ duration: 2, repeat: Infinity }}
+               >
+                 Total Points
+               </motion.span>
+               <motion.span 
+                 className="text-7xl sm:text-8xl font-black text-transparent bg-clip-text bg-gradient-to-r from-green-300 via-purple-300 to-blue-300 drop-shadow-lg"
+                 animate={{ scale: [1, 1.05, 1] }}
+                 transition={{ duration: 1.5, repeat: Infinity }}
+               >
                  {((score.correct * 100) - (score.wrong * 50)).toLocaleString()}
-               </span>
-            </div>
+               </motion.span>
+               <motion.p 
+                 className="text-purple-200 text-xs font-black mt-3"
+                 animate={{ opacity: [0.7, 1, 0.7] }}
+                 transition={{ duration: 1.5, repeat: Infinity }}
+               >
+                 🎯 FINAL SCORE 🎯
+               </motion.p>
+            </motion.div>
 
             <div className="flex flex-col sm:flex-row gap-4 w-full">
               <button
