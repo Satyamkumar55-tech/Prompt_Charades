@@ -11,8 +11,11 @@ import useSpeechToText from './hooks/useSpeechToText';
 import useTextToSpeech from './hooks/useTextToSpeech';
 import { CATEGORIES, CHARADES_WORDS } from './data/words';
 import ThemeToggle from './components/ThemeToggle';
+import logo from '/favicon.png';
 
 const App = () => {
+
+  const [showSplash, setShowSplash] = useState(true);
   // Theme State
   const [theme, setTheme] = useState('dark');
 
@@ -27,6 +30,14 @@ const App = () => {
   const toggleTheme = () => {
     setTheme(prev => prev === 'dark' ? 'light' : 'dark');
   };
+
+  useEffect(() => {
+  const timer = setTimeout(() => {
+    setShowSplash(false);
+  }, 3500);
+
+  return () => clearTimeout(timer);
+}, []);
 
   // Game State
   // onboarding → category_select → playing → results
@@ -310,6 +321,76 @@ const App = () => {
 
   const currentCategory = selectedCategory ? CATEGORIES[selectedCategory] : null;
   const currentWord = (activeWordPool[currentWordIndex] || {}).word || "Game Over";
+  if (showSplash) {
+  return (
+    <motion.div
+      className="splash-screen"
+      initial={{ opacity: 1 }}
+      exit={{ opacity: 0 }}
+      animate={{ opacity: 1 }}
+    >
+
+      {/* Animated Background Glow */}
+      <motion.div
+        className="splash-glow"
+        animate={{
+          scale: [1, 1.2, 1],
+          opacity: [0.5, 1, 0.5],
+        }}
+        transition={{
+          duration: 3,
+          repeat: Infinity,
+        }}
+      />
+
+      {/* Logo */}
+      <motion.img
+        src={logo}
+        alt="Prompt Charades"
+        className="splash-logo"
+        initial={{
+          scale: 0.3,
+          opacity: 0,
+          rotate: -20,
+        }}
+        animate={{
+          scale: [0.3, 1.1, 1],
+          opacity: 1,
+          rotate: [0, 5, -5, 0],
+        }}
+        transition={{
+          duration: 2.5,
+          ease: "easeInOut",
+        }}
+      />
+
+      {/* Text */}
+      <motion.h1
+        className="splash-title"
+        initial={{ opacity: 0, y: 30 }}
+        animate={{ opacity: 1, y: 0 }}
+        transition={{
+          delay: 1,
+          duration: 1,
+        }}
+      >
+        Prompt Charades
+      </motion.h1>
+
+      <motion.p
+        className="splash-tagline"
+        initial={{ opacity: 0 }}
+        animate={{ opacity: 1 }}
+        transition={{
+          delay: 1.5,
+        }}
+      >
+        Charades Meets AI
+      </motion.p>
+
+    </motion.div>
+  );
+}
 
   return (
     <div className="w-full h-full flex flex-col items-center justify-center p-6 relative overflow-hidden">
@@ -1042,6 +1123,8 @@ const App = () => {
     </div>
   );
 };
+
+
 
 import { Analytics } from "@vercel/analytics/react";
 
