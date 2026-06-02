@@ -51,4 +51,4 @@ npm run dev
 Contributions, bug reports, and exciting new category ideas are always welcome! Feel free to open an issue or submit a pull request.
 
 ---
-*Built with ❤️ for rapid-fire fun!*
+*Built with ❤️ by SATYAM for rapid-fire fun!*
