@@ -1,0 +1,155 @@
+/* Splash Screen Styles */
+
+.splash-container {
+  position: fixed;
+  inset: 0;
+  width: 100%;
+  height: 100vh;
+  background: radial-gradient(circle at center, #110022 0%, #030008 100%);
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  align-items: center;
+  overflow: hidden;
+  z-index: 9999;
+}
+
+/* Background grid / glowing effects */
+.splash-bg-glow {
+  position: absolute;
+  width: 500px;
+  height: 500px;
+  border-radius: 50%;
+  background: radial-gradient(circle, rgba(138, 43, 226, 0.15) 0%, rgba(0, 0, 0, 0) 70%);
+  filter: blur(60px);
+  pointer-events: none;
+  z-index: 1;
+}
+
+.splash-content {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  z-index: 10;
+  width: 100%;
+  max-width: 600px;
+  padding: 20px;
+}
+
+/* SVG Logo Styling */
+.splash-logo-svg {
+  width: 260px;
+  height: 260px;
+  filter: drop-shadow(0 0 15px rgba(186, 85, 211, 0.4));
+  margin-bottom: 10px;
+}
+
+/* Calendar Flip Letters */
+.splash-title-wrapper {
+  perspective: 1000px;
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  gap: 2px;
+  margin-top: 15px;
+  user-select: none;
+}
+
+.flip-letter-container {
+  display: inline-block;
+  perspective: 400px;
+}
+
+.flip-letter {
+  display: inline-block;
+  font-family: 'Space Grotesk', sans-serif;
+  font-size: clamp(2rem, 5vw, 3.2rem);
+  font-weight: 800;
+  color: #ffffff;
+  text-transform: lowercase;
+  transform-style: preserve-3d;
+  /* Glowing text matching orange/red from image */
+  text-shadow: 
+    0 0 4px #ff5100,
+    0 0 12px #ff2a00,
+    0 0 25px rgba(255, 68, 0, 0.8),
+    0 0 40px rgba(255, 0, 85, 0.6);
+  padding: 0 2px;
+  line-height: 1.2;
+}
+
+/* Spark Particle Canvas */
+.particles-canvas {
+  position: absolute;
+  width: 100%;
+  height: 180px;
+  bottom: 0px; /* Aligned with underline and tagline */
+  pointer-events: none;
+  z-index: 5;
+}
+
+/* Circuit Underline Box */
+.underline-container {
+  position: relative;
+  width: 100%;
+  max-width: 320px;
+  height: 28px;
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  margin-top: 8px;
+  z-index: 6;
+}
+
+.circuit-svg {
+  width: 100%;
+  height: 100%;
+  filter: drop-shadow(0 0 8px rgba(255, 68, 0, 0.6)) drop-shadow(0 0 3px rgba(236, 72, 153, 0.8));
+}
+
+/* Tagline Style */
+.splash-tagline-text {
+  font-family: 'Space Grotesk', sans-serif;
+  font-size: clamp(0.7rem, 2vw, 0.82rem);
+  font-weight: 600;
+  color: rgba(255, 255, 255, 0.95);
+  letter-spacing: 0.16em;
+  text-transform: lowercase;
+  margin-top: 4px;
+  text-align: center;
+  z-index: 10;
+  text-shadow: 0 2px 10px rgba(0, 0, 0, 0.9);
+}
+
+/* Skip Button */
+.skip-btn {
+  position: absolute;
+  bottom: 30px;
+  right: 30px;
+  background: rgba(255, 255, 255, 0.04);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  padding: 8px 18px;
+  border-radius: 99px;
+  color: rgba(255, 255, 255, 0.6);
+  font-family: var(--font-main);
+  font-size: 0.75rem;
+  font-weight: 600;
+  letter-spacing: 0.05em;
+  cursor: pointer;
+  z-index: 100;
+  transition: all 0.3s ease;
+  backdrop-filter: blur(10px);
+}
+
+.skip-btn:hover {
+  background: rgba(255, 255, 255, 0.1);
+  border-color: rgba(255, 255, 255, 0.2);
+  color: #ffffff;
+  transform: translateY(-2px);
+  box-shadow: 0 4px 15px rgba(0, 0, 0, 0.4);
+}
+
+.skip-btn:active {
+  transform: translateY(0);
+}

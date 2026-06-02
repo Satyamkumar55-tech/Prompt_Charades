@@ -12,6 +12,7 @@ import useTextToSpeech from './hooks/useTextToSpeech';
 import { CATEGORIES, CHARADES_WORDS } from './data/words';
 import ThemeToggle from './components/ThemeToggle';
 import logo from '/favicon.png';
+import Splashscreen from './components/Splashscreen';
 
 const App = () => {
 
@@ -30,14 +31,6 @@ const App = () => {
   const toggleTheme = () => {
     setTheme(prev => prev === 'dark' ? 'light' : 'dark');
   };
-
-  useEffect(() => {
-  const timer = setTimeout(() => {
-    setShowSplash(false);
-  }, 3500);
-
-  return () => clearTimeout(timer);
-}, []);
 
   // Game State
   // onboarding → category_select → playing → results
@@ -321,101 +314,38 @@ const App = () => {
 
   const currentCategory = selectedCategory ? CATEGORIES[selectedCategory] : null;
   const currentWord = (activeWordPool[currentWordIndex] || {}).word || "Game Over";
-  if (showSplash) {
-  return (
-    <motion.div
-      className="splash-screen"
-      initial={{ opacity: 1 }}
-      exit={{ opacity: 0 }}
-      animate={{ opacity: 1 }}
-    >
-
-      {/* Animated Background Glow */}
-      <motion.div
-        className="splash-glow"
-        animate={{
-          scale: [1, 1.2, 1],
-          opacity: [0.5, 1, 0.5],
-        }}
-        transition={{
-          duration: 3,
-          repeat: Infinity,
-        }}
-      />
-
-      {/* Logo */}
-      <motion.img
-        src={logo}
-        alt="Prompt Charades"
-        className="splash-logo"
-        initial={{
-          scale: 0.3,
-          opacity: 0,
-          rotate: -20,
-        }}
-        animate={{
-          scale: [0.3, 1.1, 1],
-          opacity: 1,
-          rotate: [0, 5, -5, 0],
-        }}
-        transition={{
-          duration: 2.5,
-          ease: "easeInOut",
-        }}
-      />
-
-      {/* Text */}
-      <motion.h1
-        className="splash-title"
-        initial={{ opacity: 0, y: 30 }}
-        animate={{ opacity: 1, y: 0 }}
-        transition={{
-          delay: 1,
-          duration: 1,
-        }}
-      >
-        Prompt Charades
-      </motion.h1>
-
-      <motion.p
-        className="splash-tagline"
-        initial={{ opacity: 0 }}
-        animate={{ opacity: 1 }}
-        transition={{
-          delay: 1.5,
-        }}
-      >
-        Charades Meets AI
-      </motion.p>
-
-    </motion.div>
-  );
-}
 
   return (
     <div className="w-full h-full flex flex-col items-center justify-center p-6 relative overflow-hidden">
       <div className="app-bg" />
 
       {/* Top Left Control - Help */}
-      <div className="absolute top-8 left-8 z-50">
-        <button
-          onClick={() => setShowHowToPlay(true)}
-          className="p-3 bg-white/10 hover:bg-white/20 rounded-2xl text-white transition-all border border-white/10 flex items-center justify-center shadow-2xl backdrop-blur-md"
-          aria-label="How to Play"
-        >
-          <HelpCircle size={22} />
-        </button>
-      </div>
+      {!showSplash && (
+        <div className="absolute top-8 left-8 z-50">
+          <button
+            onClick={() => setShowHowToPlay(true)}
+            className="p-3 bg-white/10 hover:bg-white/20 rounded-2xl text-white transition-all border border-white/10 flex items-center justify-center shadow-2xl backdrop-blur-md"
+            aria-label="How to Play"
+          >
+            <HelpCircle size={22} />
+          </button>
+        </div>
+      )}
 
       {/* Top Right Control - Theme */}
-      <div className="absolute top-8 right-8 z-50">
-        <ThemeToggle theme={theme} toggleTheme={toggleTheme} />
-      </div>
+      {!showSplash && (
+        <div className="absolute top-8 right-8 z-50">
+          <ThemeToggle theme={theme} toggleTheme={toggleTheme} />
+        </div>
+      )}
 
       <AnimatePresence mode="wait">
+        {showSplash && (
+          <Splashscreen key="splash" onComplete={() => setShowSplash(false)} />
+        )}
 
         {/* ONBOARDING / LOGIN */}
-        {gameState === 'onboarding' && (
+        {!showSplash && gameState === 'onboarding' && (
           <motion.div
             key="onboarding"
             initial={{ opacity: 0, scale: 0.9 }}
@@ -498,7 +428,7 @@ const App = () => {
         )}
 
         {/* CATEGORY SELECTION */}
-        {gameState === 'category_select' && (
+        {!showSplash && gameState === 'category_select' && (
           <motion.div
             key="category_select"
             initial={{ opacity: 0, y: 40 }}
@@ -574,7 +504,7 @@ const App = () => {
         )}
 
         {/* PLAYING */}
-        {gameState === 'playing' && (
+        {!showSplash && gameState === 'playing' && (
           <motion.div
             key="playing"
             className="w-full max-w-5xl flex flex-col items-center gap-10"
@@ -879,7 +809,7 @@ const App = () => {
         )}
 
         {/* RESULTS SCREEN */}
-        {gameState === 'results' && (
+        {!showSplash && gameState === 'results' && (
           <motion.div
             key="results"
             className="card-main w-full max-w-[90%] sm:max-w-[600px] md:max-w-[750px] flex flex-col items-center"
